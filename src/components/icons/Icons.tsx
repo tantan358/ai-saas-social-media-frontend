@@ -207,7 +207,7 @@ export const EmailIcon = ({ size = 20, color = 'currentColor' }: { size?: number
       strokeLinejoin="round"
     />
     <path
-      d="L22 6L12 13L2 6"
+      d="M22 6L12 13L2 6"
       stroke={color}
       strokeWidth="2"
       strokeLinecap="round"
