@@ -1,12 +1,14 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../hooks/useAuth'
+import { useContextSelection } from '../../hooks/useContextSelection'
 import Button from '../ui/Button'
 import { DashboardIcon, CampaignIcon, SocialIcon, SettingsIcon } from '../icons/Icons'
 
 export default function Layout() {
   const { t, i18n } = useTranslation()
   const { logout } = useAuth()
+  const { agency, clients, selectedClientId, setSelectedClientId, loading } = useContextSelection()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -64,6 +66,46 @@ export default function Layout() {
             Nervia AI
           </h2>
         </div>
+
+        {/* Agency (read-only) + Client selector */}
+        {!loading && agency && (
+          <div
+            style={{
+              padding: 'var(--spacing-md)',
+              borderBottom: '1px solid var(--gray-200)',
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
+              Agency
+            </div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {agency.name}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)' }}>
+              Client
+            </div>
+            <select
+              value={selectedClientId ?? ''}
+              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              style={{
+                width: '100%',
+                padding: 'var(--spacing-sm) var(--spacing-md)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--gray-300)',
+                fontSize: '0.875rem',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">Select client...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav style={{ flex: 1, padding: 'var(--spacing-md)' }}>

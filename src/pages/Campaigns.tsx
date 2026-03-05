@@ -1,37 +1,50 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { campaignsApi, CampaignCreate } from '../api/campaigns'
+import { useContextSelection } from '../hooks/useContextSelection'
 
 export default function Campaigns() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { selectedClientId } = useContextSelection()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [formData, setFormData] = useState<CampaignCreate>({
     name: '',
     description: '',
-    language: 'es'
+    language: 'es',
+    client_id: '',
   })
 
-  // Fetch campaigns
   const { data: campaigns, isLoading } = useQuery({
-    queryKey: ['campaigns'],
-    queryFn: campaignsApi.getCampaigns
+    queryKey: ['campaigns', selectedClientId],
+    queryFn: () => campaignsApi.getCampaigns(selectedClientId ?? undefined),
+    enabled: !!selectedClientId,
   })
 
-  // Create campaign mutation
   const createMutation = useMutation({
     mutationFn: campaignsApi.createCampaign,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] })
       setShowCreateForm(false)
-      setFormData({ name: '', description: '', language: 'es' })
-    }
+      setFormData({ name: '', description: '', language: 'es', client_id: selectedClientId ?? '' })
+    },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    createMutation.mutate(formData)
+    if (!selectedClientId) return
+    createMutation.mutate({ ...formData, client_id: selectedClientId })
+  }
+
+  if (!selectedClientId) {
+    return (
+      <div style={{ padding: '2rem' }}>
+        <h1>{t('campaigns.title')}</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>Select a client in the sidebar to view and create campaigns.</p>
+      </div>
+    )
   }
 
   return (
@@ -39,14 +52,17 @@ export default function Campaigns() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1>{t('campaigns.title')}</h1>
         <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
+          onClick={() => {
+            setFormData({ ...formData, client_id: selectedClientId })
+            setShowCreateForm(!showCreateForm)
+          }}
           style={{
             padding: '0.5rem 1rem',
-            background: '#007bff',
+            background: 'var(--primary, #6366f1)',
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           {showCreateForm ? t('common.cancel') : t('campaigns.create')}
@@ -57,18 +73,16 @@ export default function Campaigns() {
         <form
           onSubmit={handleSubmit}
           style={{
-            background: '#f8f9fa',
+            background: 'var(--bg-secondary, #f8f9fa)',
             padding: '1.5rem',
             borderRadius: '8px',
-            marginBottom: '2rem'
+            marginBottom: '2rem',
           }}
         >
           <h2 style={{ marginBottom: '1rem' }}>{t('campaigns.create')}</h2>
-          
+
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              {t('campaigns.name')} *
-            </label>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.name')} *</label>
             <input
               type="text"
               value={formData.name}
@@ -77,16 +91,14 @@ export default function Campaigns() {
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px'
+                border: '1px solid var(--gray-300)',
+                borderRadius: '4px',
               }}
             />
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              {t('campaigns.description')}
-            </label>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.description')} / Objective</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -94,24 +106,22 @@ export default function Campaigns() {
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px'
+                border: '1px solid var(--gray-300)',
+                borderRadius: '4px',
               }}
             />
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              {t('campaigns.language')}
-            </label>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.language')}</label>
             <select
               value={formData.language}
               onChange={(e) => setFormData({ ...formData, language: e.target.value as 'es' | 'en' })}
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px'
+                border: '1px solid var(--gray-300)',
+                borderRadius: '4px',
               }}
             >
               <option value="es">Español</option>
@@ -130,7 +140,7 @@ export default function Campaigns() {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-                opacity: createMutation.isPending ? 0.6 : 1
+                opacity: createMutation.isPending ? 0.6 : 1,
               }}
             >
               {createMutation.isPending ? t('common.loading') : t('common.save')}
@@ -139,7 +149,7 @@ export default function Campaigns() {
               type="button"
               onClick={() => {
                 setShowCreateForm(false)
-                setFormData({ name: '', description: '', language: 'es' })
+                setFormData({ name: '', description: '', language: 'es', client_id: selectedClientId })
               }}
               style={{
                 padding: '0.5rem 1rem',
@@ -147,7 +157,7 @@ export default function Campaigns() {
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               {t('common.cancel')}
@@ -166,24 +176,31 @@ export default function Campaigns() {
         <p>{t('common.loading')}...</p>
       ) : campaigns && campaigns.length > 0 ? (
         <div>
-          <h2 style={{ marginBottom: '1rem' }}>Campaigns List</h2>
+          <h2 style={{ marginBottom: '1rem' }}>Campaigns</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #ddd' }}>
+              <tr style={{ borderBottom: '2px solid var(--gray-200)' }}>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Objective</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Language</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Created</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}></th>
               </tr>
             </thead>
             <tbody>
               {campaigns.map((campaign) => (
-                <tr key={campaign.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={campaign.id} style={{ borderBottom: '1px solid var(--gray-100)' }}>
                   <td style={{ padding: '0.75rem' }}>{campaign.name}</td>
+                  <td style={{ padding: '0.75rem', maxWidth: 300 }}>{campaign.description || '—'}</td>
                   <td style={{ padding: '0.75rem' }}>{campaign.language.toUpperCase()}</td>
                   <td style={{ padding: '0.75rem' }}>{campaign.status}</td>
                   <td style={{ padding: '0.75rem' }}>
-                    {new Date(campaign.created_at).toLocaleDateString()}
+                    <Link
+                      to={`/campaigns/${campaign.id}`}
+                      style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                    >
+                      View →
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -191,7 +208,7 @@ export default function Campaigns() {
           </table>
         </div>
       ) : (
-        <p>No campaigns yet. Create your first campaign!</p>
+        <p>No campaigns yet. Select a client and create your first campaign.</p>
       )}
     </div>
   )
