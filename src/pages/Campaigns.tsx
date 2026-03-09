@@ -1,215 +1,464 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { campaignsApi, CampaignCreate } from '../api/campaigns'
-import { useContextSelection } from '../hooks/useContextSelection'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import MainLayout from '@/components/layout/MainLayout';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useApp } from '@/contexts/AppContext';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { fetchCampaigns, createCampaign, type Campaign } from '@/services/api';
+import {
+  Plus,
+  FolderOpen,
+  Pencil,
+  Trash2,
+  Building2,
+  User,
+  MoreHorizontal,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
 
-export default function Campaigns() {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { selectedClientId } = useContextSelection()
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [formData, setFormData] = useState<CampaignCreate>({
-    name: '',
-    description: '',
-    language: 'es',
-    client_id: '',
-  })
+const statusKeyMap: Record<Campaign['status'], TranslationKey> = {
+  active: 'active',
+  draft: 'draft',
+  planned: 'planned',
+  completed: 'completed',
+};
 
-  const { data: campaigns, isLoading } = useQuery({
-    queryKey: ['campaigns', selectedClientId],
-    queryFn: () => campaignsApi.getCampaigns(selectedClientId ?? undefined),
-    enabled: !!selectedClientId,
-  })
+const statusClassMap: Record<Campaign['status'], string> = {
+  active: 'bg-success/10 text-success border-success/20',
+  draft: 'bg-muted text-muted-foreground border-border',
+  planned: 'bg-accent text-accent-foreground border-accent',
+  completed: 'bg-primary/10 text-primary border-primary/20',
+};
 
+const Campaigns = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const {
+    language,
+    selectedAgencyId,
+    selectedClientId,
+    agency,
+    clients,
+    isAgencyLoading,
+    isClientsLoading,
+    agencyError,
+    clientsError,
+  } = useApp();
+
+  const t = useTranslation(language);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [isNewCampaignOpen, setIsNewCampaignOpen] = useState(false);
+
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [newCampaignObjective, setNewCampaignObjective] = useState('');
+  const [newCampaignLanguage, setNewCampaignLanguage] = useState<string>('ES');
+
+  const activeAgencyId = selectedAgencyId ?? agency?.id ?? null;
+  const activeClientId = selectedClientId ?? null;
+  const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
+
+  // Fetch campaigns
+  const {
+    data: campaigns = [],
+    isLoading: isCampaignsLoading,
+    error: campaignsError,
+  } = useQuery({
+    queryKey: ['campaigns', activeClientId],
+    queryFn: () => fetchCampaigns(activeClientId!),
+    enabled: !!activeClientId,
+    staleTime: 30 * 1000,
+  });
+
+  // Create campaign mutation
   const createMutation = useMutation({
-    mutationFn: campaignsApi.createCampaign,
+    mutationFn: createCampaign,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
-      setShowCreateForm(false)
-      setFormData({ name: '', description: '', language: 'es', client_id: selectedClientId ?? '' })
+      queryClient.invalidateQueries({ queryKey: ['campaigns', activeClientId] });
+      setIsNewCampaignOpen(false);
+      setNewCampaignName('');
+      setNewCampaignObjective('');
+      setNewCampaignLanguage('ES');
+      toast.success(t('campaignCreated'));
     },
-  })
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to create campaign');
+    },
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedClientId) return
-    createMutation.mutate({ ...formData, client_id: selectedClientId })
-  }
+  const handleDelete = (id: string) => {
+    // TODO: connect to DELETE /campaigns/:id
+    setDeleteTargetId(null);
+    toast.success('Campaign deleted');
+  };
 
-  if (!selectedClientId) {
-    return (
-      <div style={{ padding: '2rem' }}>
-        <h1>{t('campaigns.title')}</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Select a client in the sidebar to view and create campaigns.</p>
-      </div>
-    )
-  }
+  const handleCreateCampaign = () => {
+    if (!activeAgencyId) {
+      toast.error('Agency not loaded');
+      return;
+    }
+
+    if (!activeClientId) {
+      toast.error(t('selectClient'));
+      return;
+    }
+
+    if (!newCampaignName.trim() || !newCampaignObjective.trim()) {
+      toast.error(t('fillAllFields'));
+      return;
+    }
+
+    createMutation.mutate({
+      name: newCampaignName.trim(),
+      objective: newCampaignObjective.trim(),
+      language: newCampaignLanguage,
+      clientId: activeClientId,
+      agencyId: activeAgencyId,
+    });
+  };
+
+  const handleOpenNewCampaignModal = () => {
+    setNewCampaignName('');
+    setNewCampaignObjective('');
+    setNewCampaignLanguage('ES');
+    setIsNewCampaignOpen(true);
+  };
+
+  const deleteTarget = campaigns.find((c) => c.id === deleteTargetId);
+
+  const isLoadingContext = isAgencyLoading || isClientsLoading;
+  const hasContextError = agencyError || clientsError;
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>{t('campaigns.title')}</h1>
-        <button
-          onClick={() => {
-            setFormData({ ...formData, client_id: selectedClientId })
-            setShowCreateForm(!showCreateForm)
-          }}
-          style={{
-            padding: '0.5rem 1rem',
-            background: 'var(--primary, #6366f1)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          {showCreateForm ? t('common.cancel') : t('campaigns.create')}
-        </button>
+    <MainLayout>
+      <div className="p-6 md:p-8 max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t('campaigns')}</h1>
+
+            {isLoadingContext && (
+              <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading context…</span>
+              </div>
+            )}
+
+            {hasContextError && (
+              <div className="mt-2 text-sm text-destructive">{agencyError || clientsError}</div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
+              {agency && (
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" />
+                  {agency.name}
+                </span>
+              )}
+              {agency && activeClient && <span className="text-border">·</span>}
+              {activeClient && (
+                <span className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" />
+                  {activeClient.name}
+                </span>
+              )}
+            </div>
+          </div>
+          <Button className="gap-2 shrink-0" onClick={handleOpenNewCampaignModal} disabled={!activeClientId}>
+            <Plus className="w-4 h-4" />
+            {t('newCampaign')}
+          </Button>
+        </div>
+
+        {/* Loading state */}
+        {isCampaignsLoading && (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin mb-4" />
+            <p className="text-sm">Loading campaigns…</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {campaignsError && !isCampaignsLoading && (
+          <div className="flex flex-col items-center justify-center py-24 border border-dashed border-destructive/30 rounded-xl bg-destructive/5 text-center">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-destructive" />
+            </div>
+            <p className="font-medium text-destructive mb-1">Failed to load campaigns</p>
+            <p className="text-sm text-muted-foreground">{(campaignsError as Error).message}</p>
+          </div>
+        )}
+
+        {/* No client selected */}
+        {!activeClientId && !isCampaignsLoading && !campaignsError && (
+          <div className="flex flex-col items-center justify-center py-24 border border-dashed border-border rounded-xl bg-card text-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <User className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground mb-1">{t('selectClient')}</p>
+            <p className="text-sm text-muted-foreground">Select a client from the header to view campaigns.</p>
+          </div>
+        )}
+
+        {/* Campaigns list */}
+        {!isCampaignsLoading && !campaignsError && activeClientId && (
+          <>
+            {/* Stats bar */}
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-sm text-muted-foreground">
+                {campaigns.length} {campaigns.length === 1 ? t('campaign') : t('campaignsCount')}
+              </span>
+            </div>
+
+            {campaigns.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 border border-dashed border-border rounded-xl bg-card text-center">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                  <FolderOpen className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <p className="font-medium text-foreground mb-1">{t('noCampaigns')}</p>
+                <p className="text-sm text-muted-foreground mb-6">{t('noCampaignsDesc')}</p>
+                <Button className="gap-2" onClick={handleOpenNewCampaignModal}>
+                  <Plus className="w-4 h-4" />
+                  {t('newCampaign')}
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="text-left px-5 py-3.5 font-medium text-muted-foreground">{t('campaign')}</th>
+                        <th className="text-left px-5 py-3.5 font-medium text-muted-foreground">{t('objective')}</th>
+                        <th className="text-left px-5 py-3.5 font-medium text-muted-foreground">{t('language')}</th>
+                        <th className="text-left px-5 py-3.5 font-medium text-muted-foreground">{t('status')}</th>
+                        <th className="text-right px-5 py-3.5 font-medium text-muted-foreground">{t('actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaigns.map((campaign, idx) => (
+                        <tr
+                          key={campaign.id}
+                          className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/10' : ''}`}
+                        >
+                          <td className="px-5 py-4">
+                            <span className="font-medium text-foreground">{campaign.name}</span>
+                          </td>
+                          <td className="px-5 py-4 text-muted-foreground">{campaign.objective}</td>
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground border border-border">
+                              {campaign.language}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <Badge className={`border text-xs font-medium ${statusClassMap[campaign.status]}`}>
+                              {t(statusKeyMap[campaign.status])}
+                            </Badge>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => navigate(`/campaigns/${campaign.id}`)}>
+                                <FolderOpen className="w-3.5 h-3.5" />
+                                {t('open')}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs">
+                                <Pencil className="w-3.5 h-3.5" />
+                                {t('edit')}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteTargetId(campaign.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden flex flex-col gap-3">
+                  {campaigns.map((campaign) => (
+                    <div key={campaign.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{campaign.name}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5">{campaign.objective}</p>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/campaigns/${campaign.id}`)}>
+                              <FolderOpen className="w-4 h-4 mr-2" />
+                              {t('open')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              {t('edit')}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTargetId(campaign.id)}>
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              {t('delete')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <Badge className={`border text-xs ${statusClassMap[campaign.status]}`}>
+                          {t(statusKeyMap[campaign.status])}
+                        </Badge>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground border border-border">
+                          {campaign.language}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
-      {showCreateForm && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            background: 'var(--bg-secondary, #f8f9fa)',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-          }}
-        >
-          <h2 style={{ marginBottom: '1rem' }}>{t('campaigns.create')}</h2>
+      {/* New Campaign Modal */}
+      <Dialog open={isNewCampaignOpen} onOpenChange={setIsNewCampaignOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{t('newCampaign')}</DialogTitle>
+            <DialogDescription>{t('newCampaignDesc')}</DialogDescription>
+          </DialogHeader>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.name')} *</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid var(--gray-300)',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.description')} / Objective</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={4}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid var(--gray-300)',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>{t('campaigns.language')}</label>
-            <select
-              value={formData.language}
-              onChange={(e) => setFormData({ ...formData, language: e.target.value as 'es' | 'en' })}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid var(--gray-300)',
-                borderRadius: '4px',
-              }}
-            >
-              <option value="es">Español</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-                opacity: createMutation.isPending ? 0.6 : 1,
-              }}
-            >
-              {createMutation.isPending ? t('common.loading') : t('common.save')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreateForm(false)
-                setFormData({ name: '', description: '', language: 'es', client_id: selectedClientId })
-              }}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
-
-          {createMutation.isError && (
-            <div style={{ marginTop: '1rem', color: 'red' }}>
-              {t('common.error')}: {createMutation.error instanceof Error ? createMutation.error.message : 'Unknown error'}
+          <div className="flex flex-col gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 text-sm">
+              <Building2 className="w-4 h-4 text-muted-foreground" />
+              <span className="text-muted-foreground">{t('agency')}:</span>
+              <span className="font-medium text-foreground">{agency?.name || '—'}</span>
             </div>
-          )}
-        </form>
-      )}
+            <div className="flex items-center gap-2 text-sm">
+              <User className="w-4 h-4 text-muted-foreground" />
+              <span className="text-muted-foreground">{t('client')}:</span>
+              <span className="font-medium text-foreground">{activeClient?.name || '—'}</span>
+            </div>
+          </div>
 
-      {isLoading ? (
-        <p>{t('common.loading')}...</p>
-      ) : campaigns && campaigns.length > 0 ? (
-        <div>
-          <h2 style={{ marginBottom: '1rem' }}>Campaigns</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--gray-200)' }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Name</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Objective</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Language</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map((campaign) => (
-                <tr key={campaign.id} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-                  <td style={{ padding: '0.75rem' }}>{campaign.name}</td>
-                  <td style={{ padding: '0.75rem', maxWidth: 300 }}>{campaign.description || '—'}</td>
-                  <td style={{ padding: '0.75rem' }}>{campaign.language.toUpperCase()}</td>
-                  <td style={{ padding: '0.75rem' }}>{campaign.status}</td>
-                  <td style={{ padding: '0.75rem' }}>
-                    <Link
-                      to={`/campaigns/${campaign.id}`}
-                      style={{ color: 'var(--primary)', textDecoration: 'none' }}
-                    >
-                      View →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p>No campaigns yet. Select a client and create your first campaign.</p>
-      )}
-    </div>
-  )
-}
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="campaign-name">{t('campaignName')}</Label>
+              <Input
+                id="campaign-name"
+                placeholder={t('campaignNamePlaceholder')}
+                value={newCampaignName}
+                onChange={(e) => setNewCampaignName(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-objective">{t('objective')}</Label>
+              <Input
+                id="campaign-objective"
+                placeholder={t('objectivePlaceholder')}
+                value={newCampaignObjective}
+                onChange={(e) => setNewCampaignObjective(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-language">{t('language')}</Label>
+              <Select value={newCampaignLanguage} onValueChange={setNewCampaignLanguage}>
+                <SelectTrigger id="campaign-language" className="h-10">
+                  <SelectValue placeholder={t('selectLanguage')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ES">Español (ES)</SelectItem>
+                  <SelectItem value="EN">English (EN)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setIsNewCampaignOpen(false)}>
+              {t('cancel')}
+            </Button>
+            <Button type="button" onClick={handleCreateCampaign} disabled={createMutation.isPending}>
+              {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {t('save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('deleteCampaign')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('deleteCampaignDesc')}{' '}
+              <span className="font-medium text-foreground">"{deleteTarget?.name}"</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTargetId && handleDelete(deleteTargetId)}
+            >
+              {t('delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </MainLayout>
+  );
+};
+
+export default Campaigns;

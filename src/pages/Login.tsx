@@ -1,207 +1,131 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { useAuth } from '../hooks/useAuth'
-import { authApi } from '../api/auth'
-import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
-import { EmailIcon, LockIcon } from '../components/icons/Icons'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useApp } from '@/contexts/AppContext';
+import { useTranslation } from '@/lib/i18n';
+import { useToast } from '@/hooks/use-toast';
+import { login } from '@/services/auth';
+import { Loader2 } from 'lucide-react';
 
-export default function Login() {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { login } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+const loginSchema = z.object({
+  email: z.string().trim().email({ message: 'Please enter a valid email address' }).max(255),
+  password: z.string().min(6, { message: 'Password must be at least 6 characters' }).max(100),
+});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+type LoginFormValues = z.infer<typeof loginSchema>;
 
+const Login = () => {
+  const navigate = useNavigate();
+  const { setIsAuthenticated, language } = useApp();
+  const t = useTranslation(language);
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  const onSubmit = async (data: LoginFormValues) => {
     try {
-      const tokens = await authApi.login({ email, password })
-      login(tokens.access_token, tokens.refresh_token)
-      navigate('/', { replace: true })
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed')
+      setIsLoading(true);
+      const response = await login(data.email, data.password);
+
+      // Persist tokens in the same way as the original frontend
+      localStorage.setItem('access_token', response.access_token);
+      localStorage.setItem('refresh_token', response.refresh_token);
+      localStorage.setItem('token', response.token);
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
+
+      setIsAuthenticated(true);
+      toast({
+        title: 'Success',
+        description: 'Successfully logged in',
+      });
+      navigate('/dashboard');
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to login',
+      });
     } finally {
-      setLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
-        backgroundSize: '400% 400%',
-        animation: 'gradientShift 15s ease infinite',
-        padding: 'var(--spacing-md)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Animated background elements */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-50%',
-          right: '-50%',
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-          animation: 'float 20s ease-in-out infinite',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '-50%',
-          left: '-50%',
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-          animation: 'float 25s ease-in-out infinite reverse',
-        }}
-      />
-
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '440px',
-          position: 'relative',
-          zIndex: 1,
-          animation: 'fadeIn var(--transition-slow) ease-out',
-        }}
-      >
-        <div
-          style={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRadius: 'var(--radius-2xl)',
-            padding: 'var(--spacing-2xl)',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-          }}
-        >
-          {/* Logo/Title Section */}
-          <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-2xl)' }}>
-            <h1
-              style={{
-                fontSize: '2rem',
-                fontWeight: 700,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                marginBottom: 'var(--spacing-sm)',
-              }}
-            >
-              {t('common.welcome') || 'Welcome'}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/20 p-4">
+      <Card className="w-full max-w-md shadow-xl border-border/50">
+        <CardHeader className="space-y-3 text-center pb-6">
+          <div className="mb-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              NERVIA
             </h1>
-            <p
-              style={{
-                color: 'var(--text-secondary)',
-                fontSize: '0.9375rem',
-              }}
-            >
-              Sign in to your account to continue
-            </p>
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div
-              style={{
-                background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-                color: 'var(--error)',
-                padding: 'var(--spacing-md)',
-                borderRadius: 'var(--radius-lg)',
-                marginBottom: 'var(--spacing-lg)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--spacing-sm)',
-                animation: 'fadeIn var(--transition-base) ease-out',
-              }}
-            >
-              <svg
-                style={{ width: '1.25rem', height: '1.25rem', flexShrink: 0 }}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span style={{ fontSize: '0.875rem' }}>{error}</span>
-            </div>
-          )}
-
-          {/* Login Form */}
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-              <Input
-                type="email"
-                label={t('common.email') || 'Email'}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                placeholder="you@example.com"
-                icon={<EmailIcon size={18} color="var(--gray-400)" />}
+          <CardTitle className="text-2xl font-semibold">{t('welcome')}</CardTitle>
+          <CardDescription className="text-base">{t('loginSubtitle')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('email')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="name@company.com"
+                        {...field}
+                        className="h-11"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-
-            <div style={{ marginBottom: 'var(--spacing-xl)' }}>
-              <Input
-                type="password"
-                label={t('common.password') || 'Password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                icon={<LockIcon size={18} color="var(--gray-400)" />}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('password')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        {...field}
+                        className="h-11"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={loading}
-              style={{ width: '100%' }}
-            >
-              {loading ? (t('common.loading') || 'Loading...') : (t('common.login') || 'Sign In')}
-            </Button>
-          </form>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes gradientShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        @keyframes float {
-          0%, 100% { transform: translate(0, 0) rotate(0deg); }
-          33% { transform: translate(30px, -30px) rotate(120deg); }
-          66% { transform: translate(-20px, 20px) rotate(240deg); }
-        }
-      `}</style>
+              <Button type="submit" className="w-full h-11 text-base font-medium" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('login')}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
     </div>
-  )
-}
+  );
+};
+
+export default Login;

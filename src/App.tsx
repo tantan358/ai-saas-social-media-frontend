@@ -1,40 +1,89 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Campaigns from './pages/Campaigns'
-import CampaignDetail from './pages/CampaignDetail'
-import SocialAccounts from './pages/SocialAccounts'
-import Settings from './pages/Settings'
-import Layout from './components/layout/Layout'
-import { useAuth } from './hooks/useAuth'
-import { ContextSelectionProvider } from './hooks/useContextSelection'
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AppProvider, useApp } from "@/contexts/AppContext";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Clients from "./pages/Clients";
+import Campaigns from "./pages/Campaigns";
+import CampaignDetail from "./pages/CampaignDetail";
+import Analytics from "./pages/Analytics";
+import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
 
-function App() {
-  const { isAuthenticated } = useAuth()
+const queryClient = new QueryClient();
 
-  return (
-    <Routes>
-      <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-      <Route
-        path="/"
-        element={
-          isAuthenticated ? (
-            <ContextSelectionProvider>
-              <Layout />
-            </ContextSelectionProvider>
-          ) : (
-            <Navigate to="/login" />
-          )
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="campaigns" element={<Campaigns />} />
-        <Route path="campaigns/:campaignId" element={<CampaignDetail />} />
-        <Route path="social-accounts" element={<SocialAccounts />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-    </Routes>
-  )
-}
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated } = useApp();
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+};
 
-export default App
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AppProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/clients"
+              element={
+                <ProtectedRoute>
+                  <Clients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campaigns"
+              element={
+                <ProtectedRoute>
+                  <Campaigns />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campaigns/:id"
+              element={
+                <ProtectedRoute>
+                  <CampaignDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AppProvider>
+  </QueryClientProvider>
+);
+
+export default App;

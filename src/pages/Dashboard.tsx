@@ -1,199 +1,102 @@
-import { useTranslation } from 'react-i18next'
-import Card from '../components/ui/Card'
-import { ActiveCampaignIcon, ScheduledIcon, PublishedIcon, CreateCampaignIcon, ConnectAccountIcon } from '../components/icons/Icons'
+import MainLayout from '@/components/layout/MainLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useApp } from '@/contexts/AppContext';
+import { useTranslation } from '@/lib/i18n';
+import { mockCampaigns, mockClients, mockAgencies } from '@/lib/mockData';
+import { FolderKanban, TrendingUp, Users, Calendar } from 'lucide-react';
 
-export default function Dashboard() {
-  const { t } = useTranslation()
+const Dashboard = () => {
+  const { language, selectedAgencyId, selectedClientId } = useApp();
+  const t = useTranslation(language);
+
+  const selectedAgency = mockAgencies.find((a) => a.id === selectedAgencyId);
+  const selectedClient = mockClients.find((c) => c.id === selectedClientId);
+
+  const filteredCampaigns = mockCampaigns.filter(
+    (c) => c.agencyId === selectedAgencyId && (!selectedClientId || c.clientId === selectedClientId)
+  );
+
+  const activeCampaigns = filteredCampaigns.filter((c) => c.status === 'active').length;
 
   const stats = [
     {
-      title: t('dashboard.activeCampaigns') || 'Active Campaigns',
-      value: '0',
-      icon: ActiveCampaignIcon,
-      color: 'var(--primary)',
-      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      title: t('activeCampaigns'),
+      value: activeCampaigns,
+      icon: FolderKanban,
+      color: 'text-primary',
     },
     {
-      title: t('dashboard.scheduledPosts') || 'Scheduled Posts',
-      value: '0',
-      icon: ScheduledIcon,
-      color: 'var(--secondary)',
-      gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      title: 'Total Posts',
+      value: activeCampaigns * 8,
+      icon: Calendar,
+      color: 'text-success',
     },
     {
-      title: t('dashboard.publishedPosts') || 'Published Posts',
-      value: '0',
-      icon: PublishedIcon,
-      color: 'var(--success)',
-      gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+      title: 'Engagement Rate',
+      value: '12.4%',
+      icon: TrendingUp,
+      color: 'text-accent-foreground',
     },
-  ]
+    {
+      title: 'Clients',
+      value: mockClients.filter((c) => c.agencyId === selectedAgencyId).length,
+      icon: Users,
+      color: 'text-muted-foreground',
+    },
+  ];
 
   return (
-    <div style={{ animation: 'fadeIn var(--transition-slow) ease-out' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 'var(--spacing-2xl)' }}>
-        <h1
-          style={{
-            fontSize: '2rem',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            marginBottom: 'var(--spacing-sm)',
-          }}
-        >
-          {t('dashboard.title') || 'Dashboard'}
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
-          Welcome back! Here's what's happening with your campaigns.
-        </p>
-      </div>
-
-      {/* Stats Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 'var(--spacing-lg)',
-          marginBottom: 'var(--spacing-2xl)',
-        }}
-      >
-        {stats.map((stat, index) => {
-          const IconComponent = stat.icon
-          return (
-            <Card
-              key={index}
-              hover
-              gradient
-              style={{
-                animation: `fadeIn var(--transition-base) ease-out ${index * 0.1}s both`,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <div style={{ flex: 1 }}>
-                  <p
-                    style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--text-secondary)',
-                      marginBottom: 'var(--spacing-sm)',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {stat.title}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: 700,
-                      background: stat.gradient,
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      backgroundClip: 'text',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {stat.value}
-                  </p>
-                </div>
-                <div
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: 'var(--radius-xl)',
-                    background: stat.gradient,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: 'var(--shadow-md)',
-                    color: 'white',
-                  }}
-                >
-                  <IconComponent size={28} color="white" />
-                </div>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <h2
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            marginBottom: 'var(--spacing-lg)',
-          }}
-        >
-          Quick Actions
-        </h2>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 'var(--spacing-md)',
-          }}
-        >
-          <button
-            style={{
-              padding: 'var(--spacing-lg)',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--gray-200)',
-              borderRadius: 'var(--radius-lg)',
-              cursor: 'pointer',
-              transition: 'all var(--transition-base)',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--gray-50)'
-              e.currentTarget.style.borderColor = 'var(--primary)'
-              e.currentTarget.style.transform = 'translateY(-2px)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-secondary)'
-              e.currentTarget.style.borderColor = 'var(--gray-200)'
-              e.currentTarget.style.transform = 'translateY(0)'
-            }}
-          >
-            <div style={{ marginBottom: 'var(--spacing-sm)', color: 'var(--primary)' }}>
-              <CreateCampaignIcon size={24} color="var(--primary)" />
-            </div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Create Campaign</div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 'var(--spacing-xs)' }}>
-              Start a new marketing campaign
-            </div>
-          </button>
-          <button
-            style={{
-              padding: 'var(--spacing-lg)',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--gray-200)',
-              borderRadius: 'var(--radius-lg)',
-              cursor: 'pointer',
-              transition: 'all var(--transition-base)',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--gray-50)'
-              e.currentTarget.style.borderColor = 'var(--primary)'
-              e.currentTarget.style.transform = 'translateY(-2px)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-secondary)'
-              e.currentTarget.style.borderColor = 'var(--gray-200)'
-              e.currentTarget.style.transform = 'translateY(0)'
-            }}
-          >
-            <div style={{ marginBottom: 'var(--spacing-sm)', color: 'var(--primary)' }}>
-              <ConnectAccountIcon size={24} color="var(--primary)" />
-            </div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Connect Account</div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 'var(--spacing-xs)' }}>
-              Link your social media accounts
-            </div>
-          </button>
+    <MainLayout>
+      <div className="p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">{t('dashboard')}</h1>
+          <p className="text-muted-foreground">
+            {selectedAgency?.name} {selectedClient && ` → ${selectedClient.name}`}
+          </p>
         </div>
-      </Card>
-    </div>
-  )
-}
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          {stats.map((stat) => (
+            <Card key={stat.title}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.title}
+                </CardTitle>
+                <stat.icon className={`w-5 h-5 ${stat.color}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stat.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {filteredCampaigns.slice(0, 3).map((campaign) => {
+                const client = mockClients.find((c) => c.id === campaign.clientId);
+                return (
+                  <div key={campaign.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{campaign.name}</p>
+                      <p className="text-sm text-muted-foreground">{client?.name}</p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground capitalize">
+                      {campaign.status}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default Dashboard;

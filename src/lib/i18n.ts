@@ -1,0 +1,254 @@
+export type Language = 'en' | 'es';
+
+export const translations = {
+  en: {
+    // Auth
+    login: 'Log In',
+    email: 'Email',
+    password: 'Password',
+    welcome: 'Welcome to NERVIA',
+    loginSubtitle: 'Marketing automation for agencies',
+
+    // Navigation
+    dashboard: 'Dashboard',
+    clients: 'Clients',
+    campaigns: 'Campaigns',
+    analytics: 'Analytics',
+    settings: 'Settings',
+    logout: 'Log Out',
+
+    // Context
+    selectAgency: 'Select Agency',
+    selectClient: 'Select Client',
+    agency: 'Agency',
+    client: 'Client',
+
+    // Campaigns list
+    createCampaign: 'Create Campaign',
+    newCampaign: 'New Campaign',
+    newCampaignDesc: 'Create a new campaign for your client.',
+    campaignName: 'Campaign Name',
+    campaignNamePlaceholder: 'E.g.: Summer Promo 2026',
+    noCampaigns: 'No campaigns yet',
+    noCampaignsDesc: 'Create your first campaign for this client.',
+    activeCampaigns: 'Active Campaigns',
+    campaign: 'campaign',
+    campaignsCount: 'campaigns',
+    objective: 'Objective',
+    objectivePlaceholder: 'E.g.: Increase bookings',
+    language: 'Language',
+    selectLanguage: 'Select language',
+    status: 'Status',
+    actions: 'Actions',
+    open: 'Open',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteCampaign: 'Delete campaign?',
+    deleteCampaignDesc: 'This action cannot be undone. The campaign will be permanently deleted',
+    campaignCreated: 'Campaign created successfully',
+    fillAllFields: 'Please fill in all fields',
+
+    // Statuses
+    active: 'Active',
+    draft: 'Draft',
+    planned: 'Planned',
+    completed: 'Completed',
+    approved: 'Planning Approved',
+
+    // Campaign detail
+    campaignNotFound: 'Campaign not found',
+    backToCampaigns: 'Back to campaigns',
+    created: 'Created',
+    generateMonthlyPlanning: 'Generate Monthly Planning (AI)',
+    generateMonthlyPlanningShort: 'Generate Monthly Planning',
+    monthlyPlanning: 'Monthly Planning',
+    noMonthlyPlanning: 'No monthly planning generated',
+    noMonthlyPlanningDesc: 'Generate a monthly planning with AI to organize this campaign\'s content.',
+    planningGenerated: 'Planning generated successfully',
+    approveMonthlyPlanning: 'Approve Monthly Planning',
+    approveConfirmTitle: 'Confirm approval for Week 1–4?',
+    approveConfirmDesc: 'On approval, all posts will change to "Approved" status and cannot be edited. This confirms the planning is ready to schedule.',
+    approvePlanning: 'Approve Planning',
+    planningApproved: 'Planning Approved',
+    planningApprovedDesc: 'Posts are locked for editing. Ready to schedule.',
+    planningApprovedSuccess: 'Monthly planning approved successfully',
+    noPostsThisWeek: 'No posts for this week',
+    post: 'post',
+    postsCount: 'posts',
+
+    // Weeks
+    week1: 'Week 1',
+    week2: 'Week 2',
+    week3: 'Week 3',
+    week4: 'Week 4',
+
+    // Post edit modal
+    editPost: 'Edit Post',
+    title: 'Title',
+    titlePlaceholder: 'Post title',
+    copyContent: 'Copy / Content',
+    contentPlaceholder: 'Write the post content...',
+    hashtags: 'Hashtags',
+    hashtagsPlaceholder: '#summer #restaurant #promo',
+    link: 'Link',
+    linkPlaceholder: 'https://example.com/bookings',
+    optional: 'optional',
+    postUpdated: 'Post updated',
+
+    // Post statuses
+    postGenerated: 'Generated',
+    postDraft: 'Draft',
+    postEdited: 'Edited',
+    postApproved: 'Approved',
+    postPublished: 'Published',
+
+    // Planning
+    monthlyPlan: 'Monthly Plan',
+    week: 'Week',
+    posts: 'Posts',
+    approveplan: 'Approve Plan',
+    planApproved: 'Plan Approved',
+    postContent: 'Post Content',
+    scheduledDate: 'Scheduled Date',
+    platform: 'Platform',
+    save: 'Save',
+    cancel: 'Cancel',
+
+    // Common
+    loading: 'Loading...',
+    error: 'Error',
+    success: 'Success',
+    errorGeneric: 'Something went wrong',
+    retry: 'Retry',
+    generatingPlanning: 'Generating your planning…',
+    generatingPlanningDesc: 'Our AI is crafting your monthly content plan. This may take a moment.',
+  },
+  es: {
+    // Auth
+    login: 'Iniciar Sesión',
+    email: 'Correo',
+    password: 'Contraseña',
+    welcome: 'Bienvenido a NERVIA',
+    loginSubtitle: 'Automatización de marketing para agencias',
+
+    // Navigation
+    dashboard: 'Panel',
+    clients: 'Clientes',
+    campaigns: 'Campañas',
+    analytics: 'Analítica',
+    settings: 'Configuración',
+    logout: 'Cerrar Sesión',
+
+    // Context
+    selectAgency: 'Seleccionar Agencia',
+    selectClient: 'Seleccionar Cliente',
+    agency: 'Agencia',
+    client: 'Cliente',
+
+    // Campaigns list
+    createCampaign: 'Crear Campaña',
+    newCampaign: 'Nueva Campaña',
+    newCampaignDesc: 'Crea una nueva campaña para tu cliente.',
+    campaignName: 'Nombre de la campaña',
+    campaignNamePlaceholder: 'Ej: Promoción Verano 2026',
+    noCampaigns: 'Sin campañas',
+    noCampaignsDesc: 'Crea tu primera campaña para este cliente.',
+    activeCampaigns: 'Campañas Activas',
+    campaign: 'campaña',
+    campaignsCount: 'campañas',
+    objective: 'Objetivo',
+    objectivePlaceholder: 'Ej: Aumentar reservaciones',
+    language: 'Idioma',
+    selectLanguage: 'Selecciona idioma',
+    status: 'Estado',
+    actions: 'Acciones',
+    open: 'Abrir',
+    edit: 'Editar',
+    delete: 'Eliminar',
+    deleteCampaign: '¿Eliminar campaña?',
+    deleteCampaignDesc: 'Esta acción no se puede deshacer. Se eliminará permanentemente la campaña',
+    campaignCreated: 'Campaña creada exitosamente',
+    fillAllFields: 'Por favor completa todos los campos',
+
+    // Statuses
+    active: 'Activa',
+    draft: 'Borrador',
+    planned: 'Planeada',
+    completed: 'Completada',
+    approved: 'Planeación aprobada',
+
+    // Campaign detail
+    campaignNotFound: 'Campaña no encontrada',
+    backToCampaigns: 'Volver a campañas',
+    created: 'Creada',
+    generateMonthlyPlanning: 'Generar planeación mensual (IA)',
+    generateMonthlyPlanningShort: 'Generar planeación mensual',
+    monthlyPlanning: 'Planeación mensual',
+    noMonthlyPlanning: 'Sin planeación mensual generada',
+    noMonthlyPlanningDesc: 'Genera una planeación mensual con IA para organizar el contenido de esta campaña.',
+    planningGenerated: 'Planeación mensual generada exitosamente',
+    approveMonthlyPlanning: 'Aprobar planeación mensual',
+    approveConfirmTitle: '¿Confirmas aprobar la planeación de Semana 1–4?',
+    approveConfirmDesc: 'Al aprobar, todos los posts cambiarán a estado "Aprobado" y no podrán ser editados. Esta acción confirma que la planeación está lista para calendarizar.',
+    approvePlanning: 'Aprobar planeación',
+    planningApproved: 'Planeación aprobada',
+    planningApprovedDesc: 'Los posts están bloqueados para edición. Listos para calendarizar.',
+    planningApprovedSuccess: 'Planeación mensual aprobada exitosamente',
+    noPostsThisWeek: 'Sin posts para esta semana',
+    post: 'post',
+    postsCount: 'posts',
+
+    // Weeks
+    week1: 'Semana 1',
+    week2: 'Semana 2',
+    week3: 'Semana 3',
+    week4: 'Semana 4',
+
+    // Post edit modal
+    editPost: 'Editar publicación',
+    title: 'Título',
+    titlePlaceholder: 'Título del post',
+    copyContent: 'Copy / Contenido',
+    contentPlaceholder: 'Escribe el contenido del post...',
+    hashtags: 'Hashtags',
+    hashtagsPlaceholder: '#verano #restaurante #promocion',
+    link: 'Link',
+    linkPlaceholder: 'https://ejemplo.com/reservas',
+    optional: 'opcional',
+    postUpdated: 'Post actualizado',
+
+    // Post statuses
+    postGenerated: 'Generado',
+    postDraft: 'Borrador',
+    postEdited: 'Editado',
+    postApproved: 'Aprobado',
+    postPublished: 'Publicado',
+
+    // Planning
+    monthlyPlan: 'Plan Mensual',
+    week: 'Semana',
+    posts: 'Publicaciones',
+    approveplan: 'Aprobar Plan',
+    planApproved: 'Plan Aprobado',
+    postContent: 'Contenido',
+    scheduledDate: 'Fecha Programada',
+    platform: 'Plataforma',
+    save: 'Guardar',
+    cancel: 'Cancelar',
+
+    // Common
+    loading: 'Cargando...',
+    error: 'Error',
+    success: 'Éxito',
+    errorGeneric: 'Algo salió mal',
+    retry: 'Reintentar',
+    generatingPlanning: 'Generando tu planeación…',
+    generatingPlanningDesc: 'Nuestra IA está creando tu plan de contenido mensual. Esto puede tomar un momento.',
+  },
+};
+
+export type TranslationKey = keyof typeof translations.en;
+
+export const useTranslation = (lang: Language) => {
+  return (key: TranslationKey) => translations[lang][key];
+};

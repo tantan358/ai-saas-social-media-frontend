@@ -1,89 +1,22 @@
-import { InputHTMLAttributes, forwardRef } from 'react'
+import * as React from "react";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string
-  error?: string
-  icon?: React.ReactNode
-}
+import { cn } from "@/lib/utils";
 
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, style, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
     return (
-      <div style={{ width: '100%' }}>
-        {label && (
-          <label
-            style={{
-              display: 'block',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--text-secondary)',
-              marginBottom: '0.375rem',
-            }}
-          >
-            {label}
-          </label>
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className,
         )}
-        <div style={{ position: 'relative' }}>
-          {icon && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                bottom: 0,
-                paddingLeft: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                pointerEvents: 'none',
-                color: 'var(--gray-400)',
-              }}
-            >
-              {icon}
-            </div>
-          )}
-          <input
-            ref={ref}
-            style={{
-              width: '100%',
-              padding: '0.625rem 1rem',
-              paddingLeft: icon ? '2.5rem' : '1rem',
-              border: `1px solid ${error ? 'var(--error)' : 'var(--gray-300)'}`,
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontSize: '1rem',
-              transition: 'all var(--transition-base)',
-              outline: 'none',
-              ...style,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = error ? 'var(--error)' : 'var(--primary)'
-              e.currentTarget.style.boxShadow = `0 0 0 3px ${error ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)'}`
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = error ? 'var(--error)' : 'var(--gray-300)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
-            {...props}
-          />
-        </div>
-        {error && (
-          <p
-            style={{
-              marginTop: '0.375rem',
-              fontSize: '0.875rem',
-              color: 'var(--error)',
-              animation: 'fadeIn var(--transition-base) ease-out',
-            }}
-          >
-            {error}
-          </p>
-        )}
-      </div>
-    )
-  }
-)
+        ref={ref}
+        {...props}
+      />
+    );
+  },
+);
+Input.displayName = "Input";
 
-Input.displayName = 'Input'
-
-export default Input
+export { Input };

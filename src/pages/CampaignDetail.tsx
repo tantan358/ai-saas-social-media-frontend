@@ -1,329 +1,400 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { campaignsApi, Post } from '../api/campaigns'
-import { postsApi } from '../api/posts'
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import MainLayout from '@/components/layout/MainLayout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useApp } from '@/contexts/AppContext';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, type Post } from '@/services/api';
+import {
+  ArrowLeft,
+  Building2,
+  User,
+  FolderKanban,
+  Target,
+  Globe,
+  Sparkles,
+  CalendarRange,
+  CheckCircle2,
+  ShieldCheck,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import PostCard from '@/components/PostCard';
+import PostEditModal from '@/components/PostEditModal';
+import { toast } from 'sonner';
 
-export default function CampaignDetail() {
-  const { campaignId } = useParams<{ campaignId: string }>()
-  const navigate = useNavigate()
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [editingPost, setEditingPost] = useState<Post | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editContent, setEditContent] = useState('')
+const statusKeyMap: Record<string, TranslationKey> = {
+  active: 'active',
+  draft: 'draft',
+  planned: 'planned',
+  completed: 'completed',
+  approved: 'approved',
+};
 
-  const { data: campaign, isLoading } = useQuery({
-    queryKey: ['campaign', campaignId],
-    queryFn: () => campaignsApi.getCampaign(campaignId!),
-    enabled: !!campaignId,
-  })
+const statusClassMap: Record<string, string> = {
+  active: 'bg-success/10 text-success border-success/20',
+  draft: 'bg-muted text-muted-foreground border-border',
+  planned: 'bg-accent text-accent-foreground border-accent',
+  completed: 'bg-primary/10 text-primary border-primary/20',
+  approved: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+};
 
-  const { data: posts = [] } = useQuery({
-    queryKey: ['campaign-posts', campaignId],
-    queryFn: () => campaignsApi.getCampaignPosts(campaignId!),
-    enabled: !!campaignId && (campaign?.status === 'planning_generated' || campaign?.status === 'planning_approved'),
-  })
+const weekKeys: TranslationKey[] = ['week1', 'week2', 'week3', 'week4'];
 
-  const generatePlanMutation = useMutation({
-    mutationFn: () => campaignsApi.generatePlan(campaignId!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
-      queryClient.invalidateQueries({ queryKey: ['campaign-posts', campaignId] })
+const CampaignDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { language, selectedAgencyId, selectedClientId, agency, clients } = useApp();
+  const t = useTranslation(language);
+
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [isApproved, setIsApproved] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
+
+  // Fetch campaigns to find the current one
+  const { data: campaigns = [], isLoading: isCampaignLoading } = useQuery({
+    queryKey: ['campaigns', selectedClientId],
+    queryFn: () => fetchCampaigns(selectedClientId!),
+    enabled: !!selectedClientId,
+  });
+
+  const campaign = campaigns.find((c) => c.id === id);
+  const client = clients.find((c) => c.id === (campaign?.clientId || selectedClientId));
+
+  // Fetch existing plan
+  const { data: plan, isLoading: isPlanLoading, error: planError } = useQuery({
+    queryKey: ['plan', id],
+    queryFn: () => fetchPlan(id!),
+    enabled: !!id,
+    retry: false,
+  });
+
+  // Generate plan mutation
+  const generateMutation = useMutation({
+    mutationFn: () => generatePlan(id!),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['plan', id], data);
+      setLocalPosts(null);
+      toast.success(t('planningGenerated'));
     },
-  })
-
-  const approvePlanMutation = useMutation({
-    mutationFn: () => campaignsApi.approvePlan(campaignId!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
-      queryClient.invalidateQueries({ queryKey: ['campaign-posts', campaignId] })
+    onError: (err: Error) => {
+      toast.error(err.message || t('errorGeneric'));
     },
-  })
+  });
 
-  const updatePostMutation = useMutation({
-    mutationFn: ({ id, title, content }: { id: string; title?: string; content?: string }) =>
-      postsApi.updatePost(id, { title, content }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaign-posts', campaignId] })
-      setEditingPost(null)
+  // Approve plan mutation
+  const approveMutation = useMutation({
+    mutationFn: () => approvePlan(id!),
+    onSuccess: (data) => {
+      // Update posts to approved status from backend response
+      setLocalPosts(data.posts);
+      setIsApproved(true);
+      setShowApproveDialog(false);
+      // Invalidate campaigns to reflect updated campaign status
+      queryClient.invalidateQueries({ queryKey: ['campaigns', selectedClientId] });
+      queryClient.invalidateQueries({ queryKey: ['plan', id] });
+      toast.success(t('planningApprovedSuccess'));
     },
-  })
+    onError: (err: Error) => {
+      setShowApproveDialog(false);
+      toast.error(err.message || t('errorGeneric'));
+    },
+  });
 
-  const openEditModal = (post: Post) => {
-    if (campaign?.status === 'planning_approved') return
-    setEditingPost(post)
-    setEditTitle(post.title ?? '')
-    setEditContent(post.content)
-  }
+  // Resolved posts: local edits override fetched plan
+  const posts = localPosts ?? plan?.posts ?? [];
+  const hasPlan = !!plan && !planError;
 
-  const handleSavePost = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingPost) return
-    updatePostMutation.mutate({
-      id: editingPost.id,
-      title: editTitle || undefined,
-      content: editContent,
-    })
-  }
-
-  const postsByWeek = (() => {
-    const map: Record<number, Post[]> = { 1: [], 2: [], 3: [], 4: [] }
-    posts.forEach((p) => {
-      const w = Math.min(4, Math.max(1, p.week_number))
-      if (!map[w]) map[w] = []
-      map[w].push(p)
-    })
-    return map
-  })()
-
-  if (!campaignId || isLoading || !campaign) {
+  if (isCampaignLoading) {
     return (
-      <div style={{ padding: '2rem' }}>
-        {isLoading ? <p>{t('common.loading')}...</p> : <p>Campaign not found.</p>}
-      </div>
-    )
+      <MainLayout>
+        <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
   }
 
-  const canGenerate = campaign.status === 'draft'
-  const canApprove = campaign.status === 'planning_generated'
-  const isLocked = campaign.status === 'planning_approved'
+  if (!campaign) {
+    return (
+      <MainLayout>
+        <div className="flex flex-col items-center justify-center py-24">
+          <p className="text-muted-foreground mb-4">{t('campaignNotFound')}</p>
+          <Button variant="outline" onClick={() => navigate('/campaigns')}>
+            {t('backToCampaigns')}
+          </Button>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const displayStatus = isApproved ? 'approved' : campaign.status;
+  const statusLabel = t(statusKeyMap[displayStatus] || 'draft');
+  const statusClass = statusClassMap[displayStatus] || statusClassMap.draft;
+
+  const handleGeneratePlanning = () => {
+    generateMutation.mutate();
+  };
+
+  const handleSavePost = (updatedPost: Post) => {
+    const current = localPosts ?? plan?.posts ?? [];
+    setLocalPosts(current.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+    toast.success(t('postUpdated'));
+  };
+
+  const handleApprovePlanning = () => {
+    approveMutation.mutate();
+  };
+
+  const handlePostClick = (post: Post) => {
+    if (!isApproved) {
+      setEditingPost(post);
+    }
+  };
+
+  const getPostsByWeek = (week: 1 | 2 | 3 | 4) => posts.filter((p) => p.week === week);
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <button
-          type="button"
-          onClick={() => navigate('/campaigns')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--primary)',
-            cursor: 'pointer',
-            marginBottom: '0.5rem',
-          }}
-        >
-          ← Back to campaigns
-        </button>
-      </div>
-
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-          {campaign.agency_name && <span>{campaign.agency_name}</span>}
-          {campaign.agency_name && campaign.client_name && ' · '}
-          {campaign.client_name && <span>{campaign.client_name}</span>}
-        </div>
-        <h1 style={{ marginTop: '0.25rem' }}>{campaign.name}</h1>
-        {campaign.description && (
-          <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>{campaign.description}</p>
-        )}
-        <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-          Language: <strong>{campaign.language.toUpperCase()}</strong> · Status: <strong>{campaign.status}</strong>
-        </div>
-      </div>
-
-      {canGenerate && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <button
-            type="button"
-            onClick={() => generatePlanMutation.mutate()}
-            disabled={generatePlanMutation.isPending}
-            style={{
-              padding: '0.75rem 1.25rem',
-              background: 'var(--primary, #6366f1)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: generatePlanMutation.isPending ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-            }}
+    <MainLayout>
+      <div className="p-6 md:p-8 max-w-5xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => navigate('/campaigns')}
           >
-            {generatePlanMutation.isPending ? 'Generating...' : 'Generate Monthly Plan (AI)'}
-          </button>
-          {generatePlanMutation.isError && (
-            <div style={{ marginTop: '0.5rem', color: 'var(--error)' }}>
-              {(generatePlanMutation.error as Error)?.message ?? 'Failed to generate plan'}
-            </div>
-          )}
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <nav className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap">
+            {agency && (
+              <>
+                <span className="flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5" />
+                  {agency.name}
+                </span>
+                <span className="text-border">/</span>
+              </>
+            )}
+            {client && (
+              <>
+                <span className="flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" />
+                  {client.name}
+                </span>
+                <span className="text-border">/</span>
+              </>
+            )}
+            <span className="flex items-center gap-1 text-foreground font-medium">
+              <FolderKanban className="w-3.5 h-3.5" />
+              {campaign.name}
+            </span>
+          </nav>
         </div>
-      )}
 
-      {(campaign.status === 'planning_generated' || campaign.status === 'planning_approved') && (
-        <>
-          <h2 style={{ marginBottom: '1rem' }}>Monthly plan – Weeks 1–4</h2>
-          {[1, 2, 3, 4].map((week) => (
-            <div
-              key={week}
-              style={{
-                border: '1px solid var(--gray-200)',
-                borderRadius: '8px',
-                marginBottom: '1rem',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--gray-50)',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                }}
-              >
-                Week {week}
+        {/* Campaign Info Card */}
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold text-foreground">{campaign.name}</h1>
+                  <Badge className={`border text-xs font-medium ${statusClass}`}>
+                    {statusLabel}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Target className="w-4 h-4 shrink-0" />
+                    <div>
+                      <span className="block text-xs text-muted-foreground/70">{t('objective')}</span>
+                      <span className="text-foreground font-medium">{campaign.objective}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Globe className="w-4 h-4 shrink-0" />
+                    <div>
+                      <span className="block text-xs text-muted-foreground/70">{t('language')}</span>
+                      <span className="text-foreground font-medium">{campaign.language}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <CalendarRange className="w-4 h-4 shrink-0" />
+                    <div>
+                      <span className="block text-xs text-muted-foreground/70">{t('created')}</span>
+                      <span className="text-foreground font-medium">{campaign.createdAt}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div style={{ padding: '1rem' }}>
-                {(postsByWeek[week] ?? []).length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No posts</p>
-                ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {(postsByWeek[week] ?? []).map((post) => (
-                      <li
-                        key={post.id}
-                        onClick={() => openEditModal(post)}
-                        style={{
-                          padding: '0.75rem',
-                          marginBottom: '0.5rem',
-                          background: 'var(--bg-secondary)',
-                          borderRadius: '6px',
-                          cursor: isLocked ? 'default' : 'pointer',
-                          border: '1px solid var(--gray-200)',
-                        }}
-                      >
-                        <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
-                          {post.title || 'Untitled'} {post.platform && `· ${post.platform}`}
-                        </div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
-                          {post.content.slice(0, 120)}
-                          {post.content.length > 120 ? '...' : ''}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>Status: {post.status}</div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {canApprove && (
-            <div style={{ marginTop: '1.5rem' }}>
-              <button
-                type="button"
-                onClick={() => approvePlanMutation.mutate()}
-                disabled={approvePlanMutation.isPending}
-                style={{
-                  padding: '0.75rem 1.25rem',
-                  background: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: approvePlanMutation.isPending ? 'not-allowed' : 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                {approvePlanMutation.isPending ? 'Approving...' : 'Approve Monthly Plan'}
-              </button>
-            </div>
-          )}
-
-          {isLocked && (
-            <p style={{ marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              Plan approved. Editing is locked.
-            </p>
-          )}
-        </>
-      )}
-
-      {editingPost && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-          onClick={() => !updatePostMutation.isPending && setEditingPost(null)}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: 500,
-              width: '90%',
-              maxHeight: '90vh',
-              overflow: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3>Edit post</h3>
-            <form onSubmit={handleSavePost}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Title</label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--gray-300)',
-                    borderRadius: '6px',
-                  }}
-                />
-              </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Content</label>
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={6}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--gray-300)',
-                    borderRadius: '6px',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  type="submit"
-                  disabled={updatePostMutation.isPending}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: 'var(--primary)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: updatePostMutation.isPending ? 'not-allowed' : 'pointer',
-                  }}
+              {!isApproved && (
+                <Button
+                  className="gap-2 shrink-0"
+                  onClick={handleGeneratePlanning}
+                  disabled={generateMutation.isPending}
                 >
-                  {updatePostMutation.isPending ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingPost(null)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: 'var(--gray-200)',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                  {generateMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {t('generateMonthlyPlanning')}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Approved Banner */}
+        {isApproved && (
+          <div className="flex items-center gap-3 p-4 mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+            <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-foreground">{t('planningApproved')}</p>
+              <p className="text-xs text-muted-foreground">{t('planningApprovedDesc')}</p>
+            </div>
           </div>
+        )}
+
+        {/* Monthly Planning */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">{t('monthlyPlanning')}</h2>
+            {hasPlan && posts.length > 0 && !isApproved && (
+              <Button className="gap-2" variant="default" onClick={() => setShowApproveDialog(true)}>
+                <CheckCircle2 className="w-4 h-4" />
+                {t('approveMonthlyPlanning')}
+              </Button>
+            )}
+          </div>
+
+          {/* Loading state for plan */}
+          {isPlanLoading && (
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((w) => (
+                <div key={w}>
+                  <Skeleton className="h-5 w-24 mb-3" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <Skeleton className="h-32" />
+                    <Skeleton className="h-32" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Generating state */}
+          {generateMutation.isPending && (
+            <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-xl bg-card text-center">
+              <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+              <p className="font-medium text-foreground mb-1">{t('generatingPlanning')}</p>
+              <p className="text-sm text-muted-foreground">{t('generatingPlanningDesc')}</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {generateMutation.isError && !hasPlan && (
+            <div className="flex flex-col items-center justify-center py-12 border border-destructive/20 rounded-xl bg-destructive/5 text-center">
+              <AlertCircle className="w-8 h-8 text-destructive mb-3" />
+              <p className="text-sm text-destructive font-medium mb-1">{t('errorGeneric')}</p>
+              <p className="text-xs text-muted-foreground mb-4">{(generateMutation.error as Error).message}</p>
+              <Button variant="outline" size="sm" onClick={handleGeneratePlanning}>
+                {t('retry')}
+              </Button>
+            </div>
+          )}
+
+          {/* No plan yet */}
+          {!isPlanLoading && !generateMutation.isPending && !hasPlan && !generateMutation.isError && (
+            <div className="flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-xl bg-card text-center">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
+                <CalendarRange className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <p className="font-medium text-foreground mb-1">{t('noMonthlyPlanning')}</p>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm">{t('noMonthlyPlanningDesc')}</p>
+              <Button className="gap-2" onClick={handleGeneratePlanning}>
+                <Sparkles className="w-4 h-4" />
+                {t('generateMonthlyPlanningShort')}
+              </Button>
+            </div>
+          )}
+
+          {/* Plan content */}
+          {!isPlanLoading && !generateMutation.isPending && hasPlan && posts.length > 0 && (
+            <div className={`space-y-6 ${isApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
+              {([1, 2, 3, 4] as const).map((week, idx) => {
+                const weekPosts = getPostsByWeek(week);
+                return (
+                  <div key={week}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">{t(weekKeys[idx])}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        ({weekPosts.length} {weekPosts.length === 1 ? t('post') : t('postsCount')})
+                      </span>
+                    </div>
+                    {weekPosts.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center">
+                        <p className="text-sm text-muted-foreground">{t('noPostsThisWeek')}</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {weekPosts.map((post) => (
+                          <PostCard key={post.id} post={post} onClick={handlePostClick} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  )
-}
+      </div>
+
+      <PostEditModal
+        post={editingPost}
+        postIndex={editingPost ? getPostsByWeek(editingPost.week).findIndex((p) => p.id === editingPost.id) + 1 : 1}
+        open={!!editingPost}
+        onClose={() => setEditingPost(null)}
+        onSave={handleSavePost}
+      />
+
+      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('approveConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('approveConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={approveMutation.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApprovePlanning} disabled={approveMutation.isPending}>
+              {approveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              {t('approvePlanning')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </MainLayout>
+  );
+};
+
+export default CampaignDetail;
