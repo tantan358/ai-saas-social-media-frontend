@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
-import { fetchCampaigns, createCampaign, type Campaign } from '@/services/api';
+import { fetchCampaigns, createCampaign, updateCampaign, deleteCampaign, type Campaign } from '@/services/api';
 import {
   Plus,
   FolderOpen,
@@ -54,6 +54,17 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 
+/** Backend expects language pattern ^(es|en)$. Dropdown shows friendly labels but option value = backend code. */
+const CAMPAIGN_LANGUAGE_OPTIONS: { value: 'es' | 'en'; label: string }[] = [
+  { value: 'es', label: 'Español (ES)' },
+  { value: 'en', label: 'English (EN)' },
+];
+
+function campaignLanguageForPayload(uiValue: string): 'es' | 'en' {
+  const found = CAMPAIGN_LANGUAGE_OPTIONS.find((o) => o.value === uiValue || o.value.toUpperCase() === uiValue);
+  return found ? found.value : 'es';
+}
+
 const statusKeyMap: Record<Campaign['status'], TranslationKey> = {
   active: 'active',
   draft: 'draft',
@@ -71,6 +82,7 @@ const statusClassMap: Record<Campaign['status'], string> = {
 const Campaigns = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // Same shared state as header client selector (AppContext.selectedClientId)
   const {
     language,
     selectedAgencyId,
@@ -86,13 +98,20 @@ const Campaigns = () => {
   const t = useTranslation(language);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isNewCampaignOpen, setIsNewCampaignOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Campaign | null>(null);
 
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newCampaignObjective, setNewCampaignObjective] = useState('');
-  const [newCampaignLanguage, setNewCampaignLanguage] = useState<string>('ES');
+  const [newCampaignLanguage, setNewCampaignLanguage] = useState<'es' | 'en'>('es');
+
+  const [editCampaignName, setEditCampaignName] = useState('');
+  const [editCampaignObjective, setEditCampaignObjective] = useState('');
+  const [editCampaignLanguage, setEditCampaignLanguage] = useState<'es' | 'en'>('es');
 
   const activeAgencyId = selectedAgencyId ?? agency?.id ?? null;
+  /** Selected client id from global app state (used for payload.client_id; never use client name in payload). */
   const activeClientId = selectedClientId ?? null;
+  /** Display only: name shown in modal for context. Not sent to API. */
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
   // Fetch campaigns
@@ -115,7 +134,7 @@ const Campaigns = () => {
       setIsNewCampaignOpen(false);
       setNewCampaignName('');
       setNewCampaignObjective('');
-      setNewCampaignLanguage('ES');
+      setNewCampaignLanguage('es');
       toast.success(t('campaignCreated'));
     },
     onError: (err: Error) => {
@@ -123,10 +142,35 @@ const Campaigns = () => {
     },
   });
 
+  // Update campaign mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { name?: string; description?: string; language?: 'es' | 'en' } }) =>
+      updateCampaign(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns', activeClientId] });
+      setEditTarget(null);
+      toast.success(language === 'en' ? 'Campaign updated' : 'Campaña actualizada');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to update campaign');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCampaign,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns', activeClientId] });
+      setDeleteTargetId(null);
+      toast.success(language === 'en' ? 'Campaign deleted' : 'Campaña eliminada');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to delete campaign');
+    },
+  });
+
   const handleDelete = (id: string) => {
-    // TODO: connect to DELETE /campaigns/:id
     setDeleteTargetId(null);
-    toast.success('Campaign deleted');
+    deleteMutation.mutate(id);
   };
 
   const handleCreateCampaign = () => {
@@ -145,20 +189,54 @@ const Campaigns = () => {
       return;
     }
 
-    createMutation.mutate({
+    // Payload uses real client id from global state only (never client name). Language: backend code only (es|en).
+    const payload = {
       name: newCampaignName.trim(),
-      objective: newCampaignObjective.trim(),
-      language: newCampaignLanguage,
-      clientId: activeClientId,
-      agencyId: activeAgencyId,
-    });
+      client_id: activeClientId,
+      description: newCampaignObjective.trim() || undefined,
+      language: campaignLanguageForPayload(newCampaignLanguage),
+    };
+    // TEMPORARY DEBUG — remove when done
+    console.debug('[Campaign create] payload:', payload);
+    console.debug('[Campaign create] selected client_id:', activeClientId, 'selected client:', activeClient);
+    console.debug('[Campaign create] language normalized:', payload.language);
+    // END TEMPORARY DEBUG
+    createMutation.mutate(payload);
   };
 
   const handleOpenNewCampaignModal = () => {
+    if (!activeClientId) {
+      toast.warning(t('selectClientFirst'));
+      return;
+    }
     setNewCampaignName('');
     setNewCampaignObjective('');
-    setNewCampaignLanguage('ES');
+    setNewCampaignLanguage('es');
     setIsNewCampaignOpen(true);
+  };
+
+  const handleOpenEditModal = (campaign: Campaign) => {
+    const desc = (campaign as any).description ?? campaign.objective ?? '';
+    setEditTarget(campaign);
+    setEditCampaignName(campaign.name);
+    setEditCampaignObjective(desc);
+    setEditCampaignLanguage((campaign.language?.toLowerCase() === 'en' ? 'en' : 'es') as 'es' | 'en');
+  };
+
+  const handleSaveEdit = () => {
+    if (!editTarget) return;
+    if (!editCampaignName.trim()) {
+      toast.error(t('fillAllFields'));
+      return;
+    }
+    updateMutation.mutate({
+      id: editTarget.id,
+      payload: {
+        name: editCampaignName.trim(),
+        description: editCampaignObjective.trim() || undefined,
+        language: editCampaignLanguage,
+      },
+    });
   };
 
   const deleteTarget = campaigns.find((c) => c.id === deleteTargetId);
@@ -196,15 +274,20 @@ const Campaigns = () => {
               {activeClient && (
                 <span className="flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" />
-                  {activeClient.name}
+                  {activeClient.name ?? activeClient.id}
                 </span>
               )}
             </div>
           </div>
-          <Button className="gap-2 shrink-0" onClick={handleOpenNewCampaignModal} disabled={!activeClientId}>
-            <Plus className="w-4 h-4" />
-            {t('newCampaign')}
-          </Button>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Button className="gap-2" onClick={handleOpenNewCampaignModal} disabled={!activeClientId}>
+              <Plus className="w-4 h-4" />
+              {t('newCampaign')}
+            </Button>
+            {!activeClientId && (
+              <p className="text-xs text-muted-foreground max-w-[220px] text-right">{t('selectClientFirst')}</p>
+            )}
+          </div>
         </div>
 
         {/* Loading state */}
@@ -233,7 +316,10 @@ const Campaigns = () => {
               <User className="w-6 h-6 text-muted-foreground" />
             </div>
             <p className="font-medium text-foreground mb-1">{t('selectClient')}</p>
-            <p className="text-sm text-muted-foreground">Select a client from the header to view campaigns.</p>
+            <p className="text-sm text-muted-foreground mb-1">
+              {language === 'en' ? 'Select a client from the header to view and create campaigns.' : 'Selecciona un cliente en el encabezado para ver y crear campañas.'}
+            </p>
+            <p className="text-sm text-muted-foreground">{t('selectClientFirst')}</p>
           </div>
         )}
 
@@ -299,14 +385,14 @@ const Campaigns = () => {
                                 <FolderOpen className="w-3.5 h-3.5" />
                                 {t('open')}
                               </Button>
-                              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs">
+                              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => handleOpenEditModal(campaign)}>
                                 <Pencil className="w-3.5 h-3.5" />
                                 {t('edit')}
                               </Button>
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                variant="outline"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
                                 onClick={() => setDeleteTargetId(campaign.id)}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -339,7 +425,7 @@ const Campaigns = () => {
                               <FolderOpen className="w-4 h-4 mr-2" />
                               {t('open')}
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenEditModal(campaign)}>
                               <Pencil className="w-4 h-4 mr-2" />
                               {t('edit')}
                             </DropdownMenuItem>
@@ -377,16 +463,22 @@ const Campaigns = () => {
           </DialogHeader>
 
           <div className="flex flex-col gap-2 p-3 rounded-lg bg-muted/50 border border-border">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {language === 'en' ? 'Active context' : 'Contexto activo'}
+            </p>
             <div className="flex items-center gap-2 text-sm">
-              <Building2 className="w-4 h-4 text-muted-foreground" />
+              <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
               <span className="text-muted-foreground">{t('agency')}:</span>
-              <span className="font-medium text-foreground">{agency?.name || '—'}</span>
+              <span className="font-medium text-foreground">{agency?.name ?? '—'}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <User className="w-4 h-4 text-muted-foreground" />
+              <User className="w-4 h-4 text-muted-foreground shrink-0" />
               <span className="text-muted-foreground">{t('client')}:</span>
-              <span className="font-medium text-foreground">{activeClient?.name || '—'}</span>
+              <span className="font-medium text-foreground">{activeClient ? (activeClient.name ?? activeClient.id) : '—'}</span>
             </div>
+            {!activeClientId && (
+              <p className="text-xs text-destructive mt-1" role="alert">{t('selectClientFirst')}</p>
+            )}
           </div>
 
           <div className="space-y-4 py-2">
@@ -412,13 +504,16 @@ const Campaigns = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="campaign-language">{t('language')}</Label>
-              <Select value={newCampaignLanguage} onValueChange={setNewCampaignLanguage}>
+              <Select value={newCampaignLanguage} onValueChange={(v) => setNewCampaignLanguage(v as 'es' | 'en')}>
                 <SelectTrigger id="campaign-language" className="h-10">
                   <SelectValue placeholder={t('selectLanguage')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ES">Español (ES)</SelectItem>
-                  <SelectItem value="EN">English (EN)</SelectItem>
+                  {CAMPAIGN_LANGUAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -428,8 +523,66 @@ const Campaigns = () => {
             <Button type="button" variant="outline" onClick={() => setIsNewCampaignOpen(false)}>
               {t('cancel')}
             </Button>
-            <Button type="button" onClick={handleCreateCampaign} disabled={createMutation.isPending}>
+            <Button type="button" onClick={handleCreateCampaign} disabled={createMutation.isPending || !activeClientId}>
               {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {t('save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign Modal */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{language === 'en' ? 'Edit campaign' : 'Editar campaña'}</DialogTitle>
+            <DialogDescription>{language === 'en' ? 'Update campaign name, objective and language.' : 'Actualiza el nombre, objetivo e idioma de la campaña.'}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-campaign-name">{t('campaignName')}</Label>
+              <Input
+                id="edit-campaign-name"
+                placeholder={t('campaignNamePlaceholder')}
+                value={editCampaignName}
+                onChange={(e) => setEditCampaignName(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-campaign-objective">{t('objective')}</Label>
+              <Input
+                id="edit-campaign-objective"
+                placeholder={t('objectivePlaceholder')}
+                value={editCampaignObjective}
+                onChange={(e) => setEditCampaignObjective(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-campaign-language">{t('language')}</Label>
+              <Select value={editCampaignLanguage} onValueChange={(v) => setEditCampaignLanguage(v as 'es' | 'en')}>
+                <SelectTrigger id="edit-campaign-language" className="h-10">
+                  <SelectValue placeholder={t('selectLanguage')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {CAMPAIGN_LANGUAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>
+              {t('cancel')}
+            </Button>
+            <Button type="button" onClick={handleSaveEdit} disabled={updateMutation.isPending || !editCampaignName.trim()}>
+              {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t('save')}
             </Button>
           </DialogFooter>

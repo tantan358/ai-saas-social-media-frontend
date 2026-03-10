@@ -2,18 +2,18 @@ import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation } from '@/lib/i18n';
-import { mockCampaigns, mockClients, mockAgencies } from '@/lib/mockData';
+// Placeholder campaign list for dashboard UI until a dashboard campaigns API exists; filtered by real agency/client.
+import { mockCampaigns } from '@/lib/mockData';
 import { FolderKanban, TrendingUp, Users, Calendar } from 'lucide-react';
 
 const Dashboard = () => {
-  const { language, selectedAgencyId, selectedClientId } = useApp();
+  const { language, agency, clients, selectedClientId } = useApp();
   const t = useTranslation(language);
 
-  const selectedAgency = mockAgencies.find((a) => a.id === selectedAgencyId);
-  const selectedClient = mockClients.find((c) => c.id === selectedClientId);
+  const selectedClient = clients.find((c) => c.id === selectedClientId) ?? null;
 
   const filteredCampaigns = mockCampaigns.filter(
-    (c) => c.agencyId === selectedAgencyId && (!selectedClientId || c.clientId === selectedClientId)
+    (c) => c.agencyId === agency?.id && (!selectedClientId || c.clientId === selectedClientId)
   );
 
   const activeCampaigns = filteredCampaigns.filter((c) => c.status === 'active').length;
@@ -39,7 +39,7 @@ const Dashboard = () => {
     },
     {
       title: 'Clients',
-      value: mockClients.filter((c) => c.agencyId === selectedAgencyId).length,
+      value: clients.length,
       icon: Users,
       color: 'text-muted-foreground',
     },
@@ -51,7 +51,7 @@ const Dashboard = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">{t('dashboard')}</h1>
           <p className="text-muted-foreground">
-            {selectedAgency?.name} {selectedClient && ` → ${selectedClient.name}`}
+            {agency?.name ?? '—'} {selectedClient && ` → ${selectedClient.name ?? selectedClient.id}`}
           </p>
         </div>
 
@@ -78,7 +78,7 @@ const Dashboard = () => {
           <CardContent>
             <div className="space-y-4">
               {filteredCampaigns.slice(0, 3).map((campaign) => {
-                const client = mockClients.find((c) => c.id === campaign.clientId);
+                const client = clients.find((c) => c.id === campaign.clientId);
                 return (
                   <div key={campaign.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>

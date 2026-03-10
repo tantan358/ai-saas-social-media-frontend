@@ -77,7 +77,7 @@ const CampaignDetail = () => {
   const campaign = campaigns.find((c) => c.id === id);
   const client = clients.find((c) => c.id === (campaign?.clientId || selectedClientId));
 
-  // Fetch existing plan
+  // Fetch existing plan (200 with plan: null when no plan yet — empty state, not error)
   const { data: plan, isLoading: isPlanLoading, error: planError } = useQuery({
     queryKey: ['plan', id],
     queryFn: () => fetchPlan(id!),
@@ -89,7 +89,17 @@ const CampaignDetail = () => {
   const generateMutation = useMutation({
     mutationFn: () => generatePlan(id!),
     onSuccess: (data) => {
-      queryClient.setQueryData(['plan', id], data);
+      const rawPlan = data.plan as any;
+      const plan = {
+        ...data.plan,
+        campaignId: rawPlan.campaign_id ?? data.plan.campaignId ?? id,
+        posts: (data.plan.posts || []).map((p: any) => ({
+          ...p,
+          week: p.week_number ?? p.week ?? 1,
+        })),
+      };
+      queryClient.setQueryData(['plan', id], plan);
+      queryClient.invalidateQueries({ queryKey: ['campaigns', selectedClientId] });
       setLocalPosts(null);
       toast.success(t('planningGenerated'));
     },
@@ -119,6 +129,7 @@ const CampaignDetail = () => {
 
   // Resolved posts: local edits override fetched plan
   const posts = localPosts ?? plan?.posts ?? [];
+  // GET /plan returns 200 with { plan: null } when no plan yet → empty state, not error
   const hasPlan = !!plan && !planError;
 
   if (isCampaignLoading) {
@@ -311,7 +322,7 @@ const CampaignDetail = () => {
             </div>
           )}
 
-          {/* Error state */}
+          {/* Error state: only for unrecoverable failure (e.g. 500, network); mock fallback still returns 200 */}
           {generateMutation.isError && !hasPlan && (
             <div className="flex flex-col items-center justify-center py-12 border border-destructive/20 rounded-xl bg-destructive/5 text-center">
               <AlertCircle className="w-8 h-8 text-destructive mb-3" />

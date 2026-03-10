@@ -42,7 +42,8 @@ export type MonthlyPlan = {
   approved: boolean;
 };
 
-// Mock data
+// Mock data – DO NOT use mockAgencies or mockClients for tenant/agency/client UI.
+// Use AppContext (agency, clients, selectedClientId) and API data only for multi-tenant behavior.
 export const mockAgencies: Agency[] = [
   { id: 'ag1', name: 'Agencia Demo XYZ' },
   { id: 'ag2', name: 'Creative Marketing Co' },
@@ -55,6 +56,7 @@ export const mockClients: Client[] = [
   { id: 'cl4', name: 'Food Delivery App', agencyId: 'ag2' },
 ];
 
+// UI-only placeholder until dashboard has real campaigns API. Filter by real agency/client yields empty for real tenants.
 export const mockCampaigns: Campaign[] = [
   {
     id: 'camp1',

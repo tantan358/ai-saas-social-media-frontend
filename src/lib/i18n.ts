@@ -16,10 +16,12 @@ export const translations = {
     analytics: 'Analytics',
     settings: 'Settings',
     logout: 'Log Out',
+    contactSupport: 'Contact support',
 
     // Context
     selectAgency: 'Select Agency',
     selectClient: 'Select Client',
+    noClientSelected: 'No client selected',
     agency: 'Agency',
     client: 'Client',
 
@@ -47,6 +49,7 @@ export const translations = {
     deleteCampaignDesc: 'This action cannot be undone. The campaign will be permanently deleted',
     campaignCreated: 'Campaign created successfully',
     fillAllFields: 'Please fill in all fields',
+    selectClientFirst: 'Select or create a client first to create a campaign',
 
     // Statuses
     active: 'Active',
@@ -138,10 +141,12 @@ export const translations = {
     analytics: 'Analítica',
     settings: 'Configuración',
     logout: 'Cerrar Sesión',
+    contactSupport: 'Contactar soporte',
 
     // Context
     selectAgency: 'Seleccionar Agencia',
     selectClient: 'Seleccionar Cliente',
+    noClientSelected: 'Sin cliente seleccionado',
     agency: 'Agencia',
     client: 'Cliente',
 
@@ -169,6 +174,7 @@ export const translations = {
     deleteCampaignDesc: 'Esta acción no se puede deshacer. Se eliminará permanentemente la campaña',
     campaignCreated: 'Campaña creada exitosamente',
     fillAllFields: 'Por favor completa todos los campos',
+    selectClientFirst: 'Selecciona o crea un cliente primero para crear una campaña',
 
     // Statuses
     active: 'Activa',

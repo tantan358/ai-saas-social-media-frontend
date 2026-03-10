@@ -1,7 +1,8 @@
-import { LayoutDashboard, Users, FolderKanban, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, Settings, Mail } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation } from '@/lib/i18n';
+import { BRAND } from '@/lib/constants';
 
 const Sidebar = () => {
   const { language } = useApp();
@@ -35,7 +36,14 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <div className="p-4 border-t">
+      <div className="p-4 border-t space-y-1">
+        <a
+          href={BRAND.supportMailto}
+          className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Mail className="w-5 h-5 shrink-0" />
+          {t('contactSupport')}
+        </a>
         <button className="w-full text-left px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
           {t('logout')}
         </button>

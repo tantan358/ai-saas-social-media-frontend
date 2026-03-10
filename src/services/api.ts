@@ -23,12 +23,12 @@ export type Campaign = {
   [key: string]: any;
 };
 
+/** Payload for POST /campaigns. Field names must match backend CampaignCreate schema. */
 export type CreateCampaignPayload = {
   name: string;
-  objective: string;
-  language: string;
-  clientId: string;
-  agencyId: string;
+  client_id: string;
+  description?: string;
+  language?: string; // backend expects "es" | "en" (lowercase)
 };
 
 class ApiError extends Error {
@@ -38,6 +38,22 @@ class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
   }
+}
+
+/** Turn FastAPI 422 detail array into a readable string for toasts. */
+function formatValidationMessage(detail: unknown): string {
+  if (!Array.isArray(detail)) return String(detail);
+  return detail
+    .map((item) => {
+      if (item && typeof item === 'object' && 'msg' in item) {
+        const loc = (item as { loc?: string[] }).loc;
+        const field = loc?.filter(Boolean).join('. ');
+        return field ? `${field}: ${(item as { msg: string }).msg}` : (item as { msg: string }).msg;
+      }
+      return String(item);
+    })
+    .filter(Boolean)
+    .join('. ') || 'Validation failed';
 }
 
 // Base URL aligned with the original frontend/back-end
@@ -138,15 +154,22 @@ const apiFetch = async <T>(
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
-      const data = await res.json();
-      message =
-        (data && (data.message || data.error || data.detail)) || message;
+      const data = (await res.json()) as { message?: string; error?: string; detail?: unknown };
+      if (data) {
+        if (data.message) message = data.message;
+        else if (data.error) message = data.error;
+        else if (res.status === 422 && data.detail != null) message = formatValidationMessage(data.detail);
+        else if (data.detail != null) message = Array.isArray(data.detail) ? formatValidationMessage(data.detail) : String(data.detail);
+      }
     } catch {
       // ignore JSON parse errors
     }
     throw new ApiError(message, res.status);
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return (await res.json()) as T;
 };
 
@@ -158,6 +181,18 @@ export const fetchClients = async (): Promise<Client[]> => {
   return apiFetch<Client[]>('/clients');
 };
 
+export type CreateClientPayload = {
+  name: string;
+  agency_id: string;
+};
+
+export const createClient = async (payload: CreateClientPayload): Promise<Client> => {
+  return apiFetch<Client>('/clients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
 export const fetchCampaigns = async (clientId: string): Promise<Campaign[]> => {
   return apiFetch<Campaign[]>(`/campaigns?client_id=${encodeURIComponent(clientId)}`);
 };
@@ -166,6 +201,26 @@ export const createCampaign = async (payload: CreateCampaignPayload): Promise<Ca
   return apiFetch<Campaign>('/campaigns', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+};
+
+/** Payload for PUT /campaigns/:id. All fields optional. */
+export type UpdateCampaignPayload = {
+  name?: string;
+  description?: string;
+  language?: 'es' | 'en';
+};
+
+export const updateCampaign = async (campaignId: string, payload: UpdateCampaignPayload): Promise<Campaign> => {
+  return apiFetch<Campaign>(`/campaigns/${encodeURIComponent(campaignId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const deleteCampaign = async (campaignId: string): Promise<void> => {
+  return apiFetch<void>(`/campaigns/${encodeURIComponent(campaignId)}`, {
+    method: 'DELETE',
   });
 };
 
@@ -186,19 +241,55 @@ export type Post = {
 export type MonthlyPlan = {
   id: string;
   campaignId: string;
-  month: string;
+  campaign_id?: string;
+  month?: string;
   posts: Post[];
   approved: boolean;
 };
 
-export const generatePlan = async (campaignId: string): Promise<MonthlyPlan> => {
-  return apiFetch<MonthlyPlan>(`/campaigns/${encodeURIComponent(campaignId)}/generate-plan`, {
-    method: 'POST',
-  });
+/** Response from POST generate-plan: campaign + plan with posts */
+export type GeneratePlanResponse = {
+  campaign: Campaign;
+  plan: MonthlyPlan;
+  /** Debug: "openai" | "mock" — backend used AI or fallback; frontend can ignore */
+  generation_mode?: 'openai' | 'mock';
 };
 
-export const fetchPlan = async (campaignId: string): Promise<MonthlyPlan> => {
-  return apiFetch<MonthlyPlan>(`/campaigns/${encodeURIComponent(campaignId)}/plan`);
+export const generatePlan = async (campaignId: string): Promise<GeneratePlanResponse> => {
+  return apiFetch<GeneratePlanResponse>(
+    `/campaigns/${encodeURIComponent(campaignId)}/generate-plan`,
+    { method: 'POST' }
+  );
+};
+
+/** GET plan response: plan is null when no monthly plan exists yet */
+export type GetPlanResponse = {
+  plan: MonthlyPlan | null;
+};
+
+function normalizePlan(plan: MonthlyPlan | null, campaignId: string): MonthlyPlan | null {
+  if (!plan) return null;
+  const raw = plan as any;
+  return {
+    ...plan,
+    campaignId: raw.campaign_id ?? plan.campaignId ?? campaignId,
+    posts: (plan.posts || []).map((p: any) => ({
+      ...p,
+      week: (p.week_number ?? p.week ?? 1) as 1 | 2 | 3 | 4,
+    })),
+  };
+}
+
+export const fetchPlan = async (campaignId: string): Promise<MonthlyPlan | null> => {
+  try {
+    const res = await apiFetch<GetPlanResponse>(`/campaigns/${encodeURIComponent(campaignId)}/plan`);
+    return normalizePlan(res.plan ?? null, campaignId);
+  } catch (e: unknown) {
+    // 404 = no plan yet (e.g. legacy backend or wrong route); treat as empty state so page is not broken
+    const status = (e as { status?: number })?.status;
+    if (status === 404) return null;
+    throw e;
+  }
 };
 
 export type UpdatePostPayload = {

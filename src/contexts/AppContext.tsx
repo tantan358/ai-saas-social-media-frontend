@@ -3,7 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import type { Language } from '@/lib/i18n';
 import { fetchClients, fetchMyAgency, type Agency, type Client } from '@/services/api';
 
-type AppContextType = {
+/** Key for persisting selected client across reloads */
+const SELECTED_CLIENT_STORAGE_KEY = 'nervia_selected_client_id';
+
+/**
+ * Global app context: active agency, active client, and client list.
+ * Single source of truth for header, Clients page, Campaigns page, and campaign creation.
+ */
+export type AppContextType = {
   language: Language;
   setLanguage: (lang: Language) => void;
   selectedAgencyId: string | null;
@@ -23,10 +30,28 @@ type AppContextType = {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function getStoredClientId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(SELECTED_CLIENT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredClientId(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(SELECTED_CLIENT_STORAGE_KEY, id);
+    else localStorage.removeItem(SELECTED_CLIENT_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguage] = useState<Language>('en');
   const [selectedAgencyId, setSelectedAgencyId] = useState<string | null>(null);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(getStoredClientId);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return !!(localStorage.getItem('access_token') || localStorage.getItem('token'));
   });
@@ -47,11 +72,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     retry: 1,
   });
 
-  // Reset selection on logout
+  // Reset selection on logout and clear persisted client
   useEffect(() => {
     if (!isAuthenticated) {
       setSelectedAgencyId(null);
       setSelectedClientId(null);
+      setStoredClientId(null);
     }
   }, [isAuthenticated]);
 
@@ -62,15 +88,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [agencyQuery.data?.id]);
 
-  // Default/select a valid client once clients load
+  // Sync selected client with backend list: clear when empty or when selected client is deleted/unavailable
   useEffect(() => {
     const list = clientsQuery.data ?? [];
-    if (!list.length) return;
-
-    if (!selectedClientId || !list.some((c) => c.id === selectedClientId)) {
+    if (list.length === 0) {
+      setSelectedClientId(null);
+      setStoredClientId(null);
+      return;
+    }
+    const selectionValid = selectedClientId && list.some((c) => c.id === selectedClientId);
+    if (!selectionValid) {
       setSelectedClientId(list[0].id);
     }
   }, [clientsQuery.data, selectedClientId]);
+
+  // Persist selected client so it survives page reload
+  useEffect(() => {
+    if (selectedClientId) setStoredClientId(selectedClientId);
+    else setStoredClientId(null);
+  }, [selectedClientId]);
 
   const value = useMemo<AppContextType>(
     () => ({
