@@ -52,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 /** Backend expects language pattern ^(es|en)$. Dropdown shows friendly labels but option value = backend code. */
@@ -90,6 +91,56 @@ const statusClassMap: Record<Campaign['status'], string> = {
   completed: 'bg-primary/10 text-primary border-primary/20',
   cancelled: 'bg-muted text-muted-foreground border-border',
 };
+
+/** Objective comes from API as `description`; frontend type uses `objective`. Support both. */
+function getCampaignObjective(campaign: Campaign): string {
+  const raw = (campaign as { description?: string }).description ?? campaign.objective;
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+const OBJECTIVE_PREVIEW_MAX = 80;
+
+/**
+ * First sentence or first ~80 characters, then "..." if longer. Returns "-" if empty.
+ */
+function getObjectivePreview(text: string | null | undefined, maxLen: number = OBJECTIVE_PREVIEW_MAX): string {
+  const s = typeof text === 'string' ? text.trim() : '';
+  if (!s) return '-';
+  const sentenceEnd = s.search(/[.!?]/);
+  const cutAt =
+    sentenceEnd >= 0 && sentenceEnd < maxLen
+      ? sentenceEnd + 1
+      : Math.min(maxLen, s.length);
+  const slice = s.slice(0, cutAt).trim();
+  const needEllipsis = cutAt < s.length;
+  return needEllipsis ? `${slice}…` : slice;
+}
+
+/** Wraps truncated objective in a tooltip that shows full text; constrains size and scrolls for long prompts. */
+function ObjectiveCell({ fullText, preview }: { fullText: string; preview: string }) {
+  const hasFullText = fullText.length > 0;
+  const content = (
+    <span className="block truncate">
+      {preview}
+    </span>
+  );
+  if (!hasFullText) return content;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="block truncate cursor-default">{preview}</span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        sideOffset={6}
+        className="max-w-[min(24rem,90vw)] max-h-[min(20rem,70vh)] overflow-y-auto overflow-x-hidden py-2 px-3 text-left whitespace-pre-wrap break-words"
+      >
+        {fullText}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 const Campaigns = () => {
   const navigate = useNavigate();
@@ -180,9 +231,10 @@ const Campaigns = () => {
     },
   });
 
-  const handleDelete = (id: string) => {
-    setDeleteTargetId(null);
-    deleteMutation.mutate(id);
+  const handleDeleteConfirm = (campaignId: string) => {
+    deleteMutation.mutate(campaignId, {
+      onSettled: () => setDeleteTargetId(null),
+    });
   };
 
   const handleCreateCampaign = () => {
@@ -380,7 +432,12 @@ const Campaigns = () => {
                           <td className="px-5 py-4">
                             <span className="font-medium text-foreground">{campaign.name}</span>
                           </td>
-                          <td className="px-5 py-4 text-muted-foreground">{campaign.objective}</td>
+                          <td className="px-5 py-4 text-muted-foreground max-w-[280px]">
+                            <ObjectiveCell
+                              fullText={getCampaignObjective(campaign)}
+                              preview={getObjectivePreview(getCampaignObjective(campaign))}
+                            />
+                          </td>
                           <td className="px-5 py-4">
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground border border-border">
                               {campaign.language}
@@ -424,7 +481,12 @@ const Campaigns = () => {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-foreground truncate">{campaign.name}</p>
-                          <p className="text-sm text-muted-foreground mt-0.5">{campaign.objective}</p>
+                          <div className="text-sm text-muted-foreground mt-0.5">
+                            <ObjectiveCell
+                              fullText={getCampaignObjective(campaign)}
+                              preview={getObjectivePreview(getCampaignObjective(campaign))}
+                            />
+                          </div>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -607,16 +669,27 @@ const Campaigns = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('deleteCampaign')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('deleteCampaignDesc')}{' '}
-              <span className="font-medium text-foreground">"{deleteTarget?.name}"</span>.
+              {t('deleteCampaignConfirm')}
+              {deleteTarget?.name && (
+                <>
+                  {' '}
+                  <span className="font-medium text-foreground">"{deleteTarget.name}"</span>?
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteTargetId && handleDelete(deleteTargetId)}
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                const id = deleteTarget?.id;
+                if (id) handleDeleteConfirm(id);
+              }}
             >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t('delete')}
             </AlertDialogAction>
           </AlertDialogFooter>

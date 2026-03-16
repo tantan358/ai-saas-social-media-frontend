@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, ReactNode } fr
 import { useQuery } from '@tanstack/react-query';
 import type { Language } from '@/lib/i18n';
 import { fetchClients, fetchMyAgency, type Agency, type Client } from '@/services/api';
+import { logout as clearAuthTokens } from '@/services/auth';
 
 /** Key for persisting selected client across reloads */
 const SELECTED_CLIENT_STORAGE_KEY = 'nervia_selected_client_id';
@@ -19,6 +20,8 @@ export type AppContextType = {
   setSelectedClientId: (id: string | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (value: boolean) => void;
+  /** Clear tokens and set unauthenticated; ProtectedRoute will redirect to /login */
+  logout: () => void;
 
   agency: Agency | null;
   clients: Client[];
@@ -121,6 +124,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setSelectedClientId,
       isAuthenticated,
       setIsAuthenticated,
+      logout: () => {
+        clearAuthTokens();
+        setIsAuthenticated(false);
+      },
 
       agency: agencyQuery.data ?? null,
       clients: clientsQuery.data ?? [],

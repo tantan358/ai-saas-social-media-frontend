@@ -1,4 +1,4 @@
-import { ChevronDown, Loader2, Mail } from 'lucide-react';
+import { Check, ChevronDown, Globe, Loader2, Mail } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation } from '@/lib/i18n';
 import { BRAND } from '@/lib/constants';
@@ -18,7 +18,7 @@ const Header = () => {
     setLanguage,
     selectedClientId,
     setSelectedClientId,
-    setIsAuthenticated,
+    logout,
     agency,
     clients,
     isAgencyLoading,
@@ -39,13 +39,6 @@ const Header = () => {
     : selectedClient
       ? selectedClient.name ?? selectedClient.id
       : t('noClientSelected');
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token');
-    setIsAuthenticated(false);
-  };
 
   return (
     <header className="h-16 border-b bg-card px-6 flex items-center justify-between">
@@ -95,25 +88,34 @@ const Header = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Language toggle */}
-        <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
-          <Button
-            variant={language === 'en' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setLanguage('en')}
-            className="h-8 px-3"
-          >
-            EN
-          </Button>
-          <Button
-            variant={language === 'es' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setLanguage('es')}
-            className="h-8 px-3"
-          >
-            ES
-          </Button>
-        </div>
+        {/* Language selector: globe + code, dropdown style */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-2 h-9 min-w-[4.5rem] px-3 rounded-md border border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
+              aria-label={language === 'en' ? 'Language: English' : 'Idioma: Español'}
+            >
+              <Globe className="w-4 h-4 shrink-0" aria-hidden />
+              <span className="text-sm font-medium uppercase tabular-nums">{language}</span>
+              <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[9rem]">
+            <DropdownMenuItem onClick={() => setLanguage('en')} className="gap-2 cursor-pointer">
+              {language === 'en' && <Check className="w-4 h-4 shrink-0 text-primary" />}
+              {language !== 'en' && <span className="w-4 shrink-0" />}
+              <span className="text-sm font-medium uppercase tabular-nums">EN</span>
+              <span className="text-muted-foreground">English</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLanguage('es')} className="gap-2 cursor-pointer">
+              {language === 'es' && <Check className="w-4 h-4 shrink-0 text-primary" />}
+              {language !== 'es' && <span className="w-4 shrink-0" />}
+              <span className="text-sm font-medium uppercase tabular-nums">ES</span>
+              <span className="text-muted-foreground">Español</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User menu */}
         <DropdownMenu>
@@ -136,7 +138,7 @@ const Header = () => {
                 {t('contactSupport')}
               </a>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleLogout}>{t('logout')}</DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>{t('logout')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

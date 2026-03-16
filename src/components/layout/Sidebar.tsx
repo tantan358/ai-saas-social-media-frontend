@@ -5,7 +5,7 @@ import { useTranslation } from '@/lib/i18n';
 import { BRAND } from '@/lib/constants';
 
 const Sidebar = () => {
-  const { language } = useApp();
+  const { language, logout } = useApp();
   const t = useTranslation(language);
 
   const navItems = [
@@ -44,7 +44,11 @@ const Sidebar = () => {
           <Mail className="w-5 h-5 shrink-0" />
           {t('contactSupport')}
         </a>
-        <button className="w-full text-left px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+        <button
+          type="button"
+          className="w-full text-left px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          onClick={logout}
+        >
           {t('logout')}
         </button>
       </div>

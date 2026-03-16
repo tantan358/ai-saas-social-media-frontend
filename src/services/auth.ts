@@ -61,3 +61,10 @@ export const login = async (email: string, password: string): Promise<LoginRespo
     throw error;
   }
 };
+
+/** Clear auth tokens from storage. Call before setIsAuthenticated(false) for full logout. */
+export const logout = (): void => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('token');
+};
