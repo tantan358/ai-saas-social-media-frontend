@@ -16,7 +16,9 @@ const Dashboard = () => {
     (c) => c.agencyId === agency?.id && (!selectedClientId || c.clientId === selectedClientId)
   );
 
-  const activeCampaigns = filteredCampaigns.filter((c) => c.status === 'active').length;
+  const activeCampaigns = filteredCampaigns.filter(
+    (c) => !['completed', 'cancelled'].includes(c.status)
+  ).length;
 
   const stats = [
     {

@@ -153,7 +153,9 @@ const Clients = () => {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {agencyClients.map((client, index) => {
               const campaigns = getClientCampaigns(index);
-              const activeCampaigns = campaigns.filter((c) => c.status === 'active').length;
+              const activeCampaigns = campaigns.filter(
+                (c) => !['completed', 'cancelled'].includes(c.status)
+              ).length;
               const campaignsLoading = campaignQueries[index]?.isLoading;
 
               return (

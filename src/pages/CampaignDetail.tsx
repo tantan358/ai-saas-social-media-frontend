@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
-import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, type Post } from '@/services/api';
+import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, resetPlan, type Post } from '@/services/api';
 import {
   ArrowLeft,
   Building2,
@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Loader2,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -38,22 +39,37 @@ import PostEditModal from '@/components/PostEditModal';
 import { toast } from 'sonner';
 
 const statusKeyMap: Record<string, TranslationKey> = {
-  active: 'active',
   draft: 'draft',
-  planned: 'planned',
-  completed: 'completed',
+  planning_generated: 'statusPlanningGenerated',
+  planning_editing: 'statusPlanningEditing',
+  planning_approved: 'statusPlanningApproved',
   approved: 'approved',
+  posts_generated: 'statusPostsGenerated',
+  posts_approved: 'statusPostsApproved',
+  scheduled: 'statusScheduled',
+  publishing: 'statusPublishing',
+  completed: 'statusCompleted',
+  cancelled: 'statusCancelled',
 };
 
 const statusClassMap: Record<string, string> = {
-  active: 'bg-success/10 text-success border-success/20',
   draft: 'bg-muted text-muted-foreground border-border',
-  planned: 'bg-accent text-accent-foreground border-accent',
-  completed: 'bg-primary/10 text-primary border-primary/20',
+  planning_generated: 'bg-accent text-accent-foreground border-accent',
+  planning_editing: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  planning_approved: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
   approved: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  posts_generated: 'bg-primary/10 text-primary border-primary/20',
+  posts_approved: 'bg-primary/10 text-primary border-primary/20',
+  scheduled: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  publishing: 'bg-success/10 text-success border-success/20',
+  completed: 'bg-primary/10 text-primary border-primary/20',
+  cancelled: 'bg-muted text-muted-foreground border-border',
 };
 
 const weekKeys: TranslationKey[] = ['week1', 'week2', 'week3', 'week4'];
+
+/** Campaign statuses that block Reset Planning (scheduled/published or later). */
+const RESET_PLAN_BLOCKED_STATUSES = ['scheduled', 'publishing', 'completed', 'cancelled'];
 
 const CampaignDetail = () => {
   const { id } = useParams();
@@ -65,6 +81,8 @@ const CampaignDetail = () => {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isApproved, setIsApproved] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
 
   // Fetch campaigns to find the current one
@@ -85,10 +103,12 @@ const CampaignDetail = () => {
     retry: false,
   });
 
-  // Generate plan mutation
+  // Generate plan mutation (vars.isRegenerate: true when replacing an existing plan)
   const generateMutation = useMutation({
-    mutationFn: () => generatePlan(id!),
-    onSuccess: (data) => {
+    mutationFn: (vars?: { isRegenerate?: boolean }) => generatePlan(id!),
+    onSuccess: (data, vars) => {
+      setShowRegenerateDialog(false);
+      setEditingPost(null);
       const rawPlan = data.plan as any;
       const plan = {
         ...data.plan,
@@ -101,9 +121,28 @@ const CampaignDetail = () => {
       queryClient.setQueryData(['plan', id], plan);
       queryClient.invalidateQueries({ queryKey: ['campaigns', selectedClientId] });
       setLocalPosts(null);
-      toast.success(t('planningGenerated'));
+      toast.success(vars?.isRegenerate ? t('planningRegenerated') : t('planningGenerated'));
     },
     onError: (err: Error) => {
+      setShowRegenerateDialog(false);
+      toast.error(err.message || t('errorGeneric'));
+    },
+  });
+
+  // Reset plan mutation
+  const resetMutation = useMutation({
+    mutationFn: () => resetPlan(id!),
+    onSuccess: () => {
+      setShowResetDialog(false);
+      setEditingPost(null);
+      setLocalPosts(null);
+      queryClient.setQueryData(['plan', id], null);
+      queryClient.invalidateQueries({ queryKey: ['campaigns', selectedClientId] });
+      setIsApproved(false);
+      toast.success(t('planningResetSuccess'));
+    },
+    onError: (err: Error) => {
+      setShowResetDialog(false);
       toast.error(err.message || t('errorGeneric'));
     },
   });
@@ -131,6 +170,13 @@ const CampaignDetail = () => {
   const posts = localPosts ?? plan?.posts ?? [];
   // GET /plan returns 200 with { plan: null } when no plan yet → empty state, not error
   const hasPlan = !!plan && !planError;
+  // Approved: from server status or local state after approving
+  const isPlanApproved = campaign?.status === 'planning_approved' || isApproved;
+  // Reset Planning: allowed when there is a plan and campaign is not scheduled/published
+  const canResetPlan =
+    hasPlan &&
+    campaign &&
+    !RESET_PLAN_BLOCKED_STATUSES.includes(campaign.status);
 
   if (isCampaignLoading) {
     return (
@@ -157,12 +203,21 @@ const CampaignDetail = () => {
     );
   }
 
-  const displayStatus = isApproved ? 'approved' : campaign.status;
+  const displayStatus = isPlanApproved ? 'approved' : campaign.status;
   const statusLabel = t(statusKeyMap[displayStatus] || 'draft');
   const statusClass = statusClassMap[displayStatus] || statusClassMap.draft;
 
   const handleGeneratePlanning = () => {
-    generateMutation.mutate();
+    if (hasPlan && !isPlanApproved) {
+      setShowRegenerateDialog(true);
+    } else {
+      generateMutation.mutate({ isRegenerate: false });
+    }
+  };
+
+  const handleConfirmRegenerate = () => {
+    generateMutation.mutate({ isRegenerate: true });
+    setShowRegenerateDialog(false);
   };
 
   const handleSavePost = (updatedPost: Post) => {
@@ -257,31 +312,49 @@ const CampaignDetail = () => {
                   </div>
                 </div>
               </div>
-              {!isApproved && (
-                <Button
-                  className="gap-2 shrink-0"
-                  onClick={handleGeneratePlanning}
-                  disabled={generateMutation.isPending}
-                >
-                  {generateMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  {t('generateMonthlyPlanning')}
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {!isPlanApproved && (
+                  <Button
+                    className="gap-2"
+                    onClick={handleGeneratePlanning}
+                    disabled={generateMutation.isPending}
+                  >
+                    {generateMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    {hasPlan ? t('regenerateMonthlyPlanning') : t('generateMonthlyPlanning')}
+                  </Button>
+                )}
+                {canResetPlan && (
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => setShowResetDialog(true)}
+                    disabled={resetMutation.isPending}
+                  >
+                    {resetMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4" />
+                    )}
+                    {t('resetPlanning')}
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Approved Banner */}
-        {isApproved && (
+        {isPlanApproved && (
           <div className="flex items-center gap-3 p-4 mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
             <div>
               <p className="text-sm font-medium text-foreground">{t('planningApproved')}</p>
               <p className="text-xs text-muted-foreground">{t('planningApprovedDesc')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('planningApprovedNoRegenerate')}</p>
             </div>
           </div>
         )}
@@ -290,7 +363,7 @@ const CampaignDetail = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">{t('monthlyPlanning')}</h2>
-            {hasPlan && posts.length > 0 && !isApproved && (
+            {hasPlan && posts.length > 0 && !isPlanApproved && (
               <Button className="gap-2" variant="default" onClick={() => setShowApproveDialog(true)}>
                 <CheckCircle2 className="w-4 h-4" />
                 {t('approveMonthlyPlanning')}
@@ -351,7 +424,7 @@ const CampaignDetail = () => {
 
           {/* Plan content */}
           {!isPlanLoading && !generateMutation.isPending && hasPlan && posts.length > 0 && (
-            <div className={`space-y-6 ${isApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
+            <div className={`space-y-6 ${isPlanApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
               {([1, 2, 3, 4] as const).map((week, idx) => {
                 const weekPosts = getPostsByWeek(week);
                 return (
@@ -400,6 +473,41 @@ const CampaignDetail = () => {
             <AlertDialogAction onClick={handleApprovePlanning} disabled={approveMutation.isPending}>
               {approveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               {t('approvePlanning')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('regenerateConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('regenerateConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={generateMutation.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRegenerate} disabled={generateMutation.isPending}>
+              {generateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              {t('regenerateConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('resetPlanningConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('resetPlanningConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetMutation.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => resetMutation.mutate()}
+              disabled={resetMutation.isPending}
+            >
+              {resetMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              {t('resetPlanningConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

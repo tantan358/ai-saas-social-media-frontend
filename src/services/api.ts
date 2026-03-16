@@ -11,6 +11,19 @@ export type Client = {
   [key: string]: any;
 };
 
+/** Campaign status values from backend (CampaignStatus enum). */
+export type CampaignStatus =
+  | 'draft'
+  | 'planning_generated'
+  | 'planning_editing'
+  | 'planning_approved'
+  | 'posts_generated'
+  | 'posts_approved'
+  | 'scheduled'
+  | 'publishing'
+  | 'completed'
+  | 'cancelled';
+
 export type Campaign = {
   id: string;
   name: string;
@@ -18,7 +31,7 @@ export type Campaign = {
   language: string;
   clientId: string;
   agencyId: string;
-  status: 'active' | 'draft' | 'planned' | 'completed';
+  status: CampaignStatus;
   createdAt: string;
   [key: string]: any;
 };
@@ -311,4 +324,11 @@ export const approvePlan = async (campaignId: string): Promise<{ campaign: Campa
     `/campaigns/${encodeURIComponent(campaignId)}/approve-plan`,
     { method: 'POST' }
   );
+};
+
+/** Remove current planning and posts; campaign returns to draft. Not allowed when scheduled/published. */
+export const resetPlan = async (campaignId: string): Promise<Campaign> => {
+  return apiFetch<Campaign>(`/campaigns/${encodeURIComponent(campaignId)}/reset-plan`, {
+    method: 'POST',
+  });
 };

@@ -66,17 +66,29 @@ function campaignLanguageForPayload(uiValue: string): 'es' | 'en' {
 }
 
 const statusKeyMap: Record<Campaign['status'], TranslationKey> = {
-  active: 'active',
   draft: 'draft',
-  planned: 'planned',
-  completed: 'completed',
+  planning_generated: 'statusPlanningGenerated',
+  planning_editing: 'statusPlanningEditing',
+  planning_approved: 'statusPlanningApproved',
+  posts_generated: 'statusPostsGenerated',
+  posts_approved: 'statusPostsApproved',
+  scheduled: 'statusScheduled',
+  publishing: 'statusPublishing',
+  completed: 'statusCompleted',
+  cancelled: 'statusCancelled',
 };
 
 const statusClassMap: Record<Campaign['status'], string> = {
-  active: 'bg-success/10 text-success border-success/20',
   draft: 'bg-muted text-muted-foreground border-border',
-  planned: 'bg-accent text-accent-foreground border-accent',
+  planning_generated: 'bg-accent text-accent-foreground border-accent',
+  planning_editing: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  planning_approved: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  posts_generated: 'bg-primary/10 text-primary border-primary/20',
+  posts_approved: 'bg-primary/10 text-primary border-primary/20',
+  scheduled: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  publishing: 'bg-success/10 text-success border-success/20',
   completed: 'bg-primary/10 text-primary border-primary/20',
+  cancelled: 'bg-muted text-muted-foreground border-border',
 };
 
 const Campaigns = () => {
