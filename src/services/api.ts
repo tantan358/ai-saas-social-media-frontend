@@ -269,6 +269,9 @@ export type Post = {
   link?: string;
 };
 
+/** Stored generation config returned with the plan (audit/debugging, prefill on regenerate). */
+export type GenerationConfigStored = Record<string, unknown>;
+
 export type MonthlyPlan = {
   id: string;
   campaignId: string;
@@ -276,6 +279,20 @@ export type MonthlyPlan = {
   month?: string;
   posts: Post[];
   approved: boolean;
+  /** Config used to generate this plan; set when plan is created/regenerated. */
+  generation_config?: GenerationConfigStored | null;
+};
+
+/** Optional body for POST generate-plan. All fields optional; backend applies defaults. */
+export type GeneratePlanConfig = {
+  posts_per_week?: number;
+  channels?: ('linkedin' | 'instagram')[];
+  distribution_strategy?: 'balanced' | 'linkedin_priority' | 'instagram_priority';
+  campaign_goal_mix?: string[];
+  content_variation?: boolean;
+  language?: 'es' | 'en';
+  content_length?: 'short' | 'medium' | 'long';
+  call_to_action_required?: boolean;
 };
 
 /** Response from POST generate-plan: campaign + plan with posts */
@@ -286,10 +303,16 @@ export type GeneratePlanResponse = {
   generation_mode?: 'openai' | 'mock';
 };
 
-export const generatePlan = async (campaignId: string): Promise<GeneratePlanResponse> => {
+export const generatePlan = async (
+  campaignId: string,
+  config?: GeneratePlanConfig | null
+): Promise<GeneratePlanResponse> => {
   return apiFetch<GeneratePlanResponse>(
     `/campaigns/${encodeURIComponent(campaignId)}/generate-plan`,
-    { method: 'POST' }
+    {
+      method: 'POST',
+      ...(config ? { body: JSON.stringify(config) } : {}),
+    }
   );
 };
 
@@ -304,6 +327,7 @@ function normalizePlan(plan: MonthlyPlan | null, campaignId: string): MonthlyPla
   return {
     ...plan,
     campaignId: raw.campaign_id ?? plan.campaignId ?? campaignId,
+    generation_config: raw.generation_config ?? plan.generation_config ?? null,
     posts: (plan.posts || []).map((p: any) => ({
       ...p,
       week: (p.week_number ?? p.week ?? 1) as 1 | 2 | 3 | 4,

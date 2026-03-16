@@ -65,8 +65,16 @@ const PostCard = ({ post, onClick }: PostCardProps) => {
       onClick={() => onClick(post)}
     >
       <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h4 className="font-medium text-foreground text-sm group-hover:text-primary transition-colors leading-snug">
+        {/* Top row: platform badge (always visible), title, status */}
+        <div className="flex items-start gap-2 mb-3">
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border shrink-0 ${platform.className}`}
+            title={platform.label}
+          >
+            <PlatformIcon className="w-3 h-3" />
+            {platform.label}
+          </span>
+          <h4 className="font-medium text-foreground text-sm group-hover:text-primary transition-colors leading-snug min-w-0 flex-1 line-clamp-2">
             {post.title}
           </h4>
           <Badge className={`border text-[10px] font-medium shrink-0 ${statusClass}`}>
@@ -78,15 +86,11 @@ const PostCard = ({ post, onClick }: PostCardProps) => {
           {post.content}
         </p>
 
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${platform.className}`}>
-            <PlatformIcon className="w-3 h-3" />
-            {platform.label}
-          </span>
-          <span className="text-[10px] text-muted-foreground ml-auto">
+        {post.scheduledDate && (
+          <div className="text-[10px] text-muted-foreground">
             {post.scheduledDate}
-          </span>
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

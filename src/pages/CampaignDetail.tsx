@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
-import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, resetPlan, type Post } from '@/services/api';
+import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, resetPlan, type Post, type GeneratePlanConfig } from '@/services/api';
 import {
   ArrowLeft,
   Building2,
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import PostCard from '@/components/PostCard';
 import PostEditModal from '@/components/PostEditModal';
+import GeneratePlanConfigModal from '@/components/GeneratePlanConfigModal';
 import { toast } from 'sonner';
 
 const statusKeyMap: Record<string, TranslationKey> = {
@@ -81,7 +82,7 @@ const CampaignDetail = () => {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isApproved, setIsApproved] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
 
@@ -103,16 +104,18 @@ const CampaignDetail = () => {
     retry: false,
   });
 
-  // Generate plan mutation (vars.isRegenerate: true when replacing an existing plan)
+  // Generate plan mutation (config optional; isRegenerate for toast message)
   const generateMutation = useMutation({
-    mutationFn: (vars?: { isRegenerate?: boolean }) => generatePlan(id!),
+    mutationFn: (vars?: { config?: GeneratePlanConfig | null; isRegenerate?: boolean }) =>
+      generatePlan(id!, vars?.config ?? undefined),
     onSuccess: (data, vars) => {
-      setShowRegenerateDialog(false);
+      setShowConfigModal(false);
       setEditingPost(null);
       const rawPlan = data.plan as any;
       const plan = {
         ...data.plan,
         campaignId: rawPlan.campaign_id ?? data.plan.campaignId ?? id,
+        generation_config: rawPlan.generation_config ?? data.plan.generation_config ?? null,
         posts: (data.plan.posts || []).map((p: any) => ({
           ...p,
           week: p.week_number ?? p.week ?? 1,
@@ -124,7 +127,7 @@ const CampaignDetail = () => {
       toast.success(vars?.isRegenerate ? t('planningRegenerated') : t('planningGenerated'));
     },
     onError: (err: Error) => {
-      setShowRegenerateDialog(false);
+      setShowConfigModal(false);
       toast.error(err.message || t('errorGeneric'));
     },
   });
@@ -208,16 +211,12 @@ const CampaignDetail = () => {
   const statusClass = statusClassMap[displayStatus] || statusClassMap.draft;
 
   const handleGeneratePlanning = () => {
-    if (hasPlan && !isPlanApproved) {
-      setShowRegenerateDialog(true);
-    } else {
-      generateMutation.mutate({ isRegenerate: false });
-    }
+    setShowConfigModal(true);
   };
 
-  const handleConfirmRegenerate = () => {
-    generateMutation.mutate({ isRegenerate: true });
-    setShowRegenerateDialog(false);
+  const handleSubmitGenerateConfig = (config: GeneratePlanConfig) => {
+    setShowConfigModal(false);
+    generateMutation.mutate({ config, isRegenerate: hasPlan });
   };
 
   const handleSavePost = (updatedPost: Post) => {
@@ -422,14 +421,14 @@ const CampaignDetail = () => {
             </div>
           )}
 
-          {/* Plan content */}
+          {/* Plan content: grid adapts for 3–7 posts per week, platform badge on every card */}
           {!isPlanLoading && !generateMutation.isPending && hasPlan && posts.length > 0 && (
-            <div className={`space-y-6 ${isPlanApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
+            <div className={`space-y-8 ${isPlanApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
               {([1, 2, 3, 4] as const).map((week, idx) => {
                 const weekPosts = getPostsByWeek(week);
                 return (
-                  <div key={week}>
-                    <div className="flex items-center gap-2 mb-3">
+                  <section key={week} className="rounded-xl border border-border/60 bg-card/50 p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-sm font-semibold text-foreground">{t(weekKeys[idx])}</h3>
                       <span className="text-xs text-muted-foreground">
                         ({weekPosts.length} {weekPosts.length === 1 ? t('post') : t('postsCount')})
@@ -440,13 +439,13 @@ const CampaignDetail = () => {
                         <p className="text-sm text-muted-foreground">{t('noPostsThisWeek')}</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                         {weekPosts.map((post) => (
                           <PostCard key={post.id} post={post} onClick={handlePostClick} />
                         ))}
                       </div>
                     )}
-                  </div>
+                  </section>
                 );
               })}
             </div>
@@ -462,6 +461,16 @@ const CampaignDetail = () => {
         onSave={handleSavePost}
       />
 
+      <GeneratePlanConfigModal
+        open={showConfigModal}
+        onOpenChange={setShowConfigModal}
+        campaignLanguage={campaign?.language ?? 'es'}
+        language={language}
+        initialConfig={plan?.generation_config ?? null}
+        onSubmit={handleSubmitGenerateConfig}
+        isSubmitting={generateMutation.isPending}
+      />
+
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -473,22 +482,6 @@ const CampaignDetail = () => {
             <AlertDialogAction onClick={handleApprovePlanning} disabled={approveMutation.isPending}>
               {approveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               {t('approvePlanning')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('regenerateConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('regenerateConfirmDesc')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={generateMutation.isPending}>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRegenerate} disabled={generateMutation.isPending}>
-              {generateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {t('regenerateConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
