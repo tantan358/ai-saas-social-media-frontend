@@ -110,13 +110,21 @@ export default function GeneratePlanConfigModal({
   );
   const [objectiveByPost, setObjectiveByPost] = useState<ContentObjective[]>([]);
 
+  const effectivePostsPerWeek = Math.min(POSTS_PER_WEEK_MAX, Math.max(POSTS_PER_WEEK_MIN, postsPerWeek));
   const totalPostsPerWeek =
-    channelValue === 'both' ? 2 * Math.min(POSTS_PER_WEEK_MAX, Math.max(POSTS_PER_WEEK_MIN, postsPerWeek)) : Math.min(POSTS_PER_WEEK_MAX, Math.max(POSTS_PER_WEEK_MIN, postsPerWeek));
+    channelValue === 'both' ? 2 * effectivePostsPerWeek : effectivePostsPerWeek;
   const totalPosts = 4 * totalPostsPerWeek;
+  /** Number of "Objective per day" rows: matches Posts per week (1–7). */
+  const objectiveByDaySlotCount = effectivePostsPerWeek;
 
   useEffect(() => {
     if (!open) return;
-    setPostsPerWeek(initialConfig?.posts_per_week ?? defaultConfig.posts_per_week!);
+    const ppw = initialConfig?.posts_per_week;
+    setPostsPerWeek(
+      typeof ppw === 'number' && ppw >= POSTS_PER_WEEK_MIN && ppw <= POSTS_PER_WEEK_MAX
+        ? ppw
+        : defaultConfig.posts_per_week!
+    );
     setDistributionStrategy(
       (initialConfig?.distribution_strategy as GeneratePlanConfig['distribution_strategy']) ??
         defaultConfig.distribution_strategy!
@@ -207,7 +215,7 @@ export default function GeneratePlanConfigModal({
       payload.objective_mode = 'mixed';
     } else if (objectiveMode === 'by_day') {
       payload.objective_mode = 'by_day';
-      payload.objective_by_day = WEEKDAY_KEYS.reduce(
+      payload.objective_by_day = WEEKDAY_KEYS.slice(0, objectiveByDaySlotCount).reduce(
         (acc, day, i) => ({ ...acc, [day]: objectiveByDay[i] ?? 'education' }),
         {} as Record<string, string>
       );
@@ -357,35 +365,41 @@ export default function GeneratePlanConfigModal({
           {objectiveMode === 'by_day' && (
             <div className="space-y-2">
               <Label>{t('generateConfigObjectiveByDay')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {objectiveByDaySlotCount} slots — matches &quot;Posts per week&quot;
+              </p>
               <div className="rounded-md border border-input p-3 bg-muted/30 space-y-2">
-                {WEEKDAY_KEYS.map((day, i) => (
-                  <div key={day} className="flex items-center gap-3">
-                    <span className="w-20 text-sm font-medium shrink-0">
-                      {t('generateConfigDay').replace('{{n}}', String(i + 1))}
-                    </span>
-                    <Select
-                      value={objectiveByDay[i] ?? 'education'}
-                      onValueChange={(v) =>
-                        setObjectiveByDay((prev) => {
-                          const next = [...prev];
-                          next[i] = v as ContentObjective;
-                          return next;
-                        })
-                      }
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTENT_OBJECTIVES.map((obj) => (
-                          <SelectItem key={obj} value={obj}>
-                            {t(`generateConfigObjective_${obj}` as TranslationKey)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                {Array.from({ length: objectiveByDaySlotCount }, (_, i) => {
+                  const dayKey = WEEKDAY_KEYS[i];
+                  return (
+                    <div key={dayKey} className="flex items-center gap-3">
+                      <span className="w-20 text-sm font-medium shrink-0">
+                        {t('generateConfigDay').replace('{{n}}', String(i + 1))}
+                      </span>
+                      <Select
+                        value={objectiveByDay[i] ?? 'education'}
+                        onValueChange={(v) =>
+                          setObjectiveByDay((prev) => {
+                            const next = [...prev];
+                            next[i] = v as ContentObjective;
+                            return next;
+                          })
+                        }
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONTENT_OBJECTIVES.map((obj) => (
+                            <SelectItem key={obj} value={obj}>
+                              {t(`generateConfigObjective_${obj}` as TranslationKey)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
