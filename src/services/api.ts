@@ -283,17 +283,42 @@ export type MonthlyPlan = {
   generation_config?: GenerationConfigStored | null;
 };
 
+/** Per-channel config for generate-plan (backend accepts this or legacy channels string[]). */
+export type ChannelConfig = {
+  name: 'linkedin' | 'instagram';
+  posts_per_week: number;
+};
+
 /** Optional body for POST generate-plan. All fields optional; backend applies defaults. */
 export type GeneratePlanConfig = {
+  /** Legacy: single posts_per_week; prefer channels with posts_per_week per channel */
   posts_per_week?: number;
-  channels?: ('linkedin' | 'instagram')[];
+  /** List of channel names (legacy) or per-channel config */
+  channels?: ('linkedin' | 'instagram')[] | ChannelConfig[];
   distribution_strategy?: 'balanced' | 'linkedin_priority' | 'instagram_priority';
   campaign_goal_mix?: string[];
+  /** mixed = use campaign_goal_mix; by_day = use objective_by_day; by_post = use objective_by_post */
+  objective_mode?: 'mixed' | 'by_day' | 'by_post';
+  /** Day name -> objective (keys: monday..sunday). Required when objective_mode=by_day */
+  objective_by_day?: Record<string, string>;
+  /** Objectives in slot order; cycles if shorter than total posts. Required when objective_mode=by_post */
+  objective_by_post?: string[];
   content_variation?: boolean;
   language?: 'es' | 'en';
   content_length?: 'short' | 'medium' | 'long';
   call_to_action_required?: boolean;
 };
+
+/** Allowed content objectives for by_day / by_post */
+export const CONTENT_OBJECTIVES = [
+  'lead_generation',
+  'education',
+  'product_promotion',
+  'brand_authority',
+  'conversion',
+  'positioning',
+] as const;
+export type ContentObjective = (typeof CONTENT_OBJECTIVES)[number];
 
 /** Response from POST generate-plan: campaign + plan with posts */
 export type GeneratePlanResponse = {
@@ -303,17 +328,27 @@ export type GeneratePlanResponse = {
   generation_mode?: 'openai' | 'mock';
 };
 
+/** Timeout for generate-plan request (ms). Must be at least as long as proxy/gateway timeout to avoid 504. */
+const GENERATE_PLAN_TIMEOUT_MS = 180_000;
+
 export const generatePlan = async (
   campaignId: string,
   config?: GeneratePlanConfig | null
 ): Promise<GeneratePlanResponse> => {
-  return apiFetch<GeneratePlanResponse>(
-    `/campaigns/${encodeURIComponent(campaignId)}/generate-plan`,
-    {
-      method: 'POST',
-      ...(config ? { body: JSON.stringify(config) } : {}),
-    }
-  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GENERATE_PLAN_TIMEOUT_MS);
+  try {
+    return await apiFetch<GeneratePlanResponse>(
+      `/campaigns/${encodeURIComponent(campaignId)}/generate-plan`,
+      {
+        method: 'POST',
+        signal: controller.signal,
+        ...(config ? { body: JSON.stringify(config) } : {}),
+      }
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 /** GET plan response: plan is null when no monthly plan exists yet */
