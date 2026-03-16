@@ -221,7 +221,13 @@ const CampaignDetail = () => {
 
   const handleSavePost = (updatedPost: Post) => {
     const current = localPosts ?? plan?.posts ?? [];
-    setLocalPosts(current.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+    const previous = current.find((p) => p.id === updatedPost.id);
+    const merged: Post = {
+      ...updatedPost,
+      hashtags: updatedPost.hashtags ?? previous?.hashtags,
+      link: updatedPost.link ?? previous?.link,
+    };
+    setLocalPosts(current.map((p) => (p.id === merged.id ? merged : p)));
     toast.success(t('postUpdated'));
   };
 

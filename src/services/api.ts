@@ -389,11 +389,29 @@ export type UpdatePostPayload = {
   link?: string;
 };
 
+/** Normalize API post (snake_case) to frontend Post shape so week filter and display work. */
+function normalizePost(raw: Record<string, unknown>): Post {
+  const week = (raw.week_number ?? raw.week ?? 1) as 1 | 2 | 3 | 4;
+  const scheduledAt = raw.scheduled_at ?? raw.scheduledDate;
+  return {
+    id: String(raw.id),
+    title: raw.title != null ? String(raw.title) : '',
+    content: raw.content != null ? String(raw.content) : '',
+    platform: (raw.platform as Post['platform']) ?? 'linkedin',
+    scheduledDate: scheduledAt != null ? (typeof scheduledAt === 'string' ? scheduledAt : (scheduledAt as Date).toISOString?.() ?? '') : '',
+    week,
+    status: (raw.status as Post['status']) ?? 'edited',
+    hashtags: raw.hashtags != null ? String(raw.hashtags) : undefined,
+    link: raw.link != null ? String(raw.link) : undefined,
+  };
+}
+
 export const updatePost = async (postId: string, payload: UpdatePostPayload): Promise<Post> => {
-  return apiFetch<Post>(`/posts/${encodeURIComponent(postId)}`, {
+  const raw = await apiFetch<Record<string, unknown>>(`/posts/${encodeURIComponent(postId)}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+  return normalizePost(raw);
 };
 
 export const approvePlan = async (campaignId: string): Promise<{ campaign: Campaign; posts: Post[] }> => {

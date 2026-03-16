@@ -17,9 +17,10 @@ const Sidebar = () => {
 
   return (
     <aside className="w-64 border-r bg-card flex flex-col h-screen">
-      <div className="p-6 border-b">
-        <h1 className="text-2xl font-bold text-primary">NERVIA</h1>
-        <p className="text-xs text-muted-foreground mt-1">Marketing Automation</p>
+      <div className="p-6 border-b space-y-0.5">
+        <h1 className="text-2xl font-bold text-primary leading-tight">NERVIA</h1>
+        <p className="text-xs font-medium text-primary/80">by REINPIA</p>
+        <p className="text-xs text-muted-foreground">Marketing Automation</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
