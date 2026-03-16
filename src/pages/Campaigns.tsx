@@ -5,6 +5,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
@@ -626,12 +627,11 @@ const Campaigns = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-campaign-objective">{t('objective')}</Label>
-              <Input
+              <Textarea
                 id="edit-campaign-objective"
                 placeholder={t('objectivePlaceholder')}
                 value={editCampaignObjective}
                 onChange={(e) => setEditCampaignObjective(e.target.value)}
-                className="h-10"
               />
             </div>
             <div className="space-y-2">

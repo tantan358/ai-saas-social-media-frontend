@@ -2,8 +2,8 @@ import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation } from '@/lib/i18n';
-// Placeholder campaign list for dashboard UI until a dashboard campaigns API exists; filtered by real agency/client.
-import { mockCampaigns } from '@/lib/mockData';
+import { useQuery } from '@tanstack/react-query';
+import { fetchCampaigns, type Campaign } from '@/services/api';
 import { FolderKanban, TrendingUp, Users, Calendar } from 'lucide-react';
 
 const Dashboard = () => {
@@ -12,13 +12,23 @@ const Dashboard = () => {
 
   const selectedClient = clients.find((c) => c.id === selectedClientId) ?? null;
 
-  const filteredCampaigns = mockCampaigns.filter(
-    (c) => c.agencyId === agency?.id && (!selectedClientId || c.clientId === selectedClientId)
-  );
+  const {
+    data: campaigns = [],
+    isLoading: isCampaignsLoading,
+    error: campaignsError,
+  } = useQuery({
+    queryKey: ['dashboard-campaigns', selectedClientId],
+    queryFn: () => fetchCampaigns(selectedClientId!),
+    enabled: !!selectedClientId,
+  });
 
-  const activeCampaigns = filteredCampaigns.filter(
-    (c) => !['completed', 'cancelled'].includes(c.status)
+  const activeCampaigns = campaigns.filter(
+    (c: Campaign) => !['completed', 'cancelled'].includes(c.status)
   ).length;
+
+  // TODO: wire Total Posts and Engagement Rate to real analytics endpoints when available.
+  const totalPosts = 0;
+  const engagementRateDisplay = '—';
 
   const stats = [
     {
@@ -29,13 +39,13 @@ const Dashboard = () => {
     },
     {
       title: 'Total Posts',
-      value: activeCampaigns * 8,
+      value: totalPosts,
       icon: Calendar,
       color: 'text-success',
     },
     {
       title: 'Engagement Rate',
-      value: '12.4%',
+      value: engagementRateDisplay,
       icon: TrendingUp,
       color: 'text-accent-foreground',
     },
@@ -78,22 +88,41 @@ const Dashboard = () => {
             <CardTitle>Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredCampaigns.slice(0, 3).map((campaign) => {
-                const client = clients.find((c) => c.id === campaign.clientId);
-                return (
-                  <div key={campaign.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{campaign.name}</p>
-                      <p className="text-sm text-muted-foreground">{client?.name}</p>
+            {campaignsError ? (
+              <p className="text-sm text-destructive">
+                {(campaignsError as Error).message || 'Failed to load campaigns.'}
+              </p>
+            ) : isCampaignsLoading ? (
+              <p className="text-sm text-muted-foreground">
+                {language === 'en' ? 'Loading campaigns…' : 'Cargando campañas…'}
+              </p>
+            ) : campaigns.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {language === 'en'
+                  ? 'No campaigns yet. Create a campaign to see activity here.'
+                  : 'Aún no hay campañas. Crea una campaña para ver actividad aquí.'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {campaigns.slice(0, 3).map((campaign) => {
+                  const client = clients.find((c) => c.id === campaign.clientId);
+                  return (
+                    <div
+                      key={campaign.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium">{campaign.name}</p>
+                        <p className="text-sm text-muted-foreground">{client?.name}</p>
+                      </div>
+                      <span className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground capitalize">
+                        {campaign.status.replace('_', ' ')}
+                      </span>
                     </div>
-                    <span className="text-xs px-3 py-1 rounded-full bg-accent text-accent-foreground capitalize">
-                      {campaign.status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
