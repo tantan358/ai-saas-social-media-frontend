@@ -88,7 +88,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [agencyQuery.data?.id]);
 
-  // Sync selected client with backend list: clear when empty or when selected client is deleted/unavailable
+  // Sync selected client with backend list. Active client fallback when list changes (e.g. after edit/archive):
+  // - List empty (e.g. last client archived) → clear selection and storage → header shows "No client selected".
+  // - List has items but current selection not in list (e.g. selected client archived) → switch to first available client.
+  // - Selection stays valid → no change. Persist effect below saves the current selection so it survives reload.
   useEffect(() => {
     const list = clientsQuery.data ?? [];
     if (list.length === 0) {

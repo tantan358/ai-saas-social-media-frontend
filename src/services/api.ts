@@ -206,6 +206,24 @@ export const createClient = async (payload: CreateClientPayload): Promise<Client
   });
 };
 
+export type UpdateClientPayload = {
+  name: string;
+};
+
+export const updateClient = async (clientId: string, payload: UpdateClientPayload): Promise<Client> => {
+  return apiFetch<Client>(`/clients/${encodeURIComponent(clientId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+};
+
+/** Archive (soft delete) a client. Fails with 409 if the client has campaigns. */
+export const archiveClient = async (clientId: string): Promise<Client> => {
+  return apiFetch<Client>(`/clients/${encodeURIComponent(clientId)}`, {
+    method: 'DELETE',
+  });
+};
+
 export const fetchCampaigns = async (clientId: string): Promise<Campaign[]> => {
   return apiFetch<Campaign[]>(`/campaigns?client_id=${encodeURIComponent(clientId)}`);
 };
