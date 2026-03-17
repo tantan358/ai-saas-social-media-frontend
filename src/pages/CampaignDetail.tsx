@@ -8,7 +8,18 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApp } from '@/contexts/AppContext';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
-import { fetchCampaigns, fetchPlan, generatePlan, approvePlan, resetPlan, type Post, type GeneratePlanConfig } from '@/services/api';
+import {
+  fetchCampaigns,
+  fetchPlan,
+  generatePlan,
+  approvePlan,
+  resetPlan,
+  scheduleAuto,
+  fetchCampaignCalendar,
+  type Post,
+  type GeneratePlanConfig,
+  type ScheduleAutoResponse,
+} from '@/services/api';
 import {
   ArrowLeft,
   Building2,
@@ -23,6 +34,7 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
+  CalendarClock,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -37,6 +49,8 @@ import {
 import PostCard from '@/components/PostCard';
 import PostEditModal from '@/components/PostEditModal';
 import GeneratePlanConfigModal from '@/components/GeneratePlanConfigModal';
+import PublicationWindowsSection from '@/components/PublicationWindowsSection';
+import CampaignCalendarSection from '@/components/CampaignCalendarSection';
 import { toast } from 'sonner';
 
 const statusKeyMap: Record<string, TranslationKey> = {
@@ -85,6 +99,7 @@ const CampaignDetail = () => {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<ScheduleAutoResponse | null>(null);
 
   // Fetch campaigns to find the current one
   const { data: campaigns = [], isLoading: isCampaignLoading } = useQuery({
@@ -146,6 +161,21 @@ const CampaignDetail = () => {
     },
     onError: (err: Error) => {
       setShowResetDialog(false);
+      toast.error(err.message || t('errorGeneric'));
+    },
+  });
+
+  // Schedule-auto mutation
+  const scheduleAutoMutation = useMutation({
+    mutationFn: (planStartDate?: string | null) => scheduleAuto(id!, planStartDate),
+    onSuccess: (data) => {
+      setScheduleResult(data);
+      queryClient.invalidateQueries({ queryKey: ['plan', id] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns', selectedClientId] });
+      queryClient.invalidateQueries({ queryKey: ['campaign-calendar', id] });
+      toast.success(t('scheduleAutoSuccess'));
+    },
+    onError: (err: Error) => {
       toast.error(err.message || t('errorGeneric'));
     },
   });
@@ -243,6 +273,9 @@ const CampaignDetail = () => {
 
   const getPostsByWeek = (week: 1 | 2 | 3 | 4) => posts.filter((p) => p.week === week);
 
+  const distribution = plan?.distribution_json ?? (plan?.total_posts != null ? undefined : null);
+  const totalPosts = plan?.total_posts ?? (distribution ? distribution.reduce((a, b) => a + b, 0) : null);
+
   return (
     <MainLayout>
       <div className="p-6 md:p-8 max-w-5xl mx-auto">
@@ -293,14 +326,25 @@ const CampaignDetail = () => {
                     {statusLabel}
                   </Badge>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Target className="w-4 h-4 shrink-0" />
-                    <div>
-                      <span className="block text-xs text-muted-foreground/70">{t('objective')}</span>
-                      <span className="text-foreground font-medium">{campaign.objective}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                  {agency && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Building2 className="w-4 h-4 shrink-0" />
+                      <div>
+                        <span className="block text-xs text-muted-foreground/70">{t('agency')}</span>
+                        <span className="text-foreground font-medium">{agency.name}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {client && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <User className="w-4 h-4 shrink-0" />
+                      <div>
+                        <span className="block text-xs text-muted-foreground/70">{t('client')}</span>
+                        <span className="text-foreground font-medium">{client.name}</span>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Globe className="w-4 h-4 shrink-0" />
                     <div>
@@ -316,6 +360,27 @@ const CampaignDetail = () => {
                     </div>
                   </div>
                 </div>
+                {hasPlan && (distribution?.length || totalPosts != null) && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">{t('distributionSummary')}</p>
+                    {distribution && distribution.length >= 4 ? (
+                      <>
+                        <div className="flex flex-wrap gap-3">
+                          {distribution.map((count, idx) => (
+                            <span key={idx} className="text-sm text-foreground">
+                              {t('weekPosts').replace('{n}', String(idx + 1)).replace('{count}', String(count))}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">{t('noEmptyWeek')}</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-foreground">
+                        {totalPosts != null ? `${totalPosts} ${t('postsCount')}` : ''}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {!isPlanApproved && (
@@ -347,10 +412,78 @@ const CampaignDetail = () => {
                     {t('resetPlanning')}
                   </Button>
                 )}
+                {isPlanApproved && (
+                  <Button
+                    className="gap-2"
+                    variant="default"
+                    onClick={() => scheduleAutoMutation.mutate()}
+                    disabled={scheduleAutoMutation.isPending}
+                  >
+                    {scheduleAutoMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CalendarClock className="w-4 h-4" />
+                    )}
+                    {t('scheduleAuto')}
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {scheduleResult && scheduleResult.assigned_count > 0 && (
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-2">{t('scheduleAutoSuccess')}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{t('timeFromWindows')}</p>
+              <div className="space-y-4">
+                {scheduleResult.by_week.map((w) => (
+                  <div key={w.week} className="rounded-lg border p-4">
+                    <h4 className="text-sm font-medium mb-2">{t(weekKeys[w.week - 1])}</h4>
+                    <div className="space-y-2">
+                      {w.by_date.map((bd) => (
+                        <div key={bd.date}>
+                          <span className="text-xs text-muted-foreground">{bd.date}</span>
+                          <ul className="mt-1 space-y-1">
+                            {bd.posts.map((p) => (
+                              <li key={p.post_id} className="text-sm">
+                                {p.scheduled_at?.slice(11, 16)} {p.platform} | {p.title || p.post_id}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isPlanApproved && id && (
+          <>
+            <div className="mb-6">
+              <PublicationWindowsSection campaignId={id} language={language} />
+            </div>
+            <div className="mb-6">
+              <CampaignCalendarSection
+                campaignId={id}
+                language={language}
+                onOpenPost={(postId) => {
+                  const post = posts.find((p) => p.id === postId);
+                  if (post) setEditingPost(post);
+                }}
+                onReschedule={(postId) => {
+                  setReschedulePostId(postId);
+                  const post = posts.find((p) => p.id === postId);
+                  if (post) setEditingPost(post);
+                }}
+              />
+            </div>
+          </>
+        )}
 
         {/* Approved Banner */}
         {isPlanApproved && (
@@ -465,6 +598,10 @@ const CampaignDetail = () => {
         open={!!editingPost}
         onClose={() => setEditingPost(null)}
         onSave={handleSavePost}
+        onScheduleSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['campaign-calendar', id] });
+          queryClient.invalidateQueries({ queryKey: ['plan', id] });
+        }}
       />
 
       <GeneratePlanConfigModal

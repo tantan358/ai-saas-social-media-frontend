@@ -29,20 +29,30 @@ const platformConfig: Record<string, { label: string; icon: typeof Instagram; cl
   },
 };
 
-const statusKeyMap: Record<PostStatus, TranslationKey> = {
+const statusKeyMap: Partial<Record<PostStatus, TranslationKey>> & Record<string, TranslationKey> = {
   generated: 'postGenerated',
   draft: 'postDraft',
   edited: 'postEdited',
   approved: 'postApproved',
   published: 'postPublished',
+  approved_final: 'postScheduledFinal',
+  scheduled: 'postScheduled',
+  paused: 'postDraft',
+  canceled: 'postCanceled',
+  ready_for_final_review: 'postEdited',
 };
 
-const statusClassMap: Record<PostStatus, string> = {
+const statusClassMap: Partial<Record<PostStatus, string>> & Record<string, string> = {
   generated: 'bg-success/10 text-success border-success/20',
   draft: 'bg-muted text-muted-foreground border-border',
   edited: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
   approved: 'bg-primary/10 text-primary border-primary/20',
   published: 'bg-accent text-accent-foreground border-accent',
+  approved_final: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  scheduled: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  paused: 'bg-muted border-border',
+  canceled: 'bg-muted text-muted-foreground border-border',
+  ready_for_final_review: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
 };
 
 type PostCardProps = {
@@ -56,8 +66,8 @@ const PostCard = ({ post, onClick }: PostCardProps) => {
 
   const platform = platformConfig[post.platform] || platformConfig.instagram;
   const PlatformIcon = platform.icon;
-  const statusLabel = t(statusKeyMap[post.status]);
-  const statusClass = statusClassMap[post.status];
+  const statusLabel = t(statusKeyMap[post.status] ?? 'postEdited');
+  const statusClass = statusClassMap[post.status] ?? statusClassMap.edited;
 
   return (
     <Card

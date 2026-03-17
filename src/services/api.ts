@@ -255,7 +255,17 @@ export const deleteCampaign = async (campaignId: string): Promise<void> => {
   });
 };
 
-export type PostStatus = 'generated' | 'draft' | 'approved' | 'published' | 'edited';
+export type PostStatus =
+  | 'generated'
+  | 'draft'
+  | 'edited'
+  | 'ready_for_final_review'
+  | 'approved_final'
+  | 'scheduled'
+  | 'paused'
+  | 'canceled'
+  | 'approved'
+  | 'published';
 
 export type Post = {
   id: string;
@@ -263,6 +273,10 @@ export type Post = {
   content: string;
   platform: 'facebook' | 'instagram' | 'twitter' | 'linkedin';
   scheduledDate: string;
+  scheduled_date?: string;
+  scheduled_time?: string;
+  scheduled_at?: string;
+  scheduling_window_id?: string | null;
   week: 1 | 2 | 3 | 4;
   status: PostStatus;
   hashtags?: string;
@@ -281,6 +295,8 @@ export type MonthlyPlan = {
   approved: boolean;
   /** Config used to generate this plan; set when plan is created/regenerated. */
   generation_config?: GenerationConfigStored | null;
+  total_posts?: number | null;
+  distribution_json?: number[] | null;
 };
 
 /** Per-channel config for generate-plan (backend accepts this or legacy channels string[]). */
@@ -363,6 +379,8 @@ function normalizePlan(plan: MonthlyPlan | null, campaignId: string): MonthlyPla
     ...plan,
     campaignId: raw.campaign_id ?? plan.campaignId ?? campaignId,
     generation_config: raw.generation_config ?? plan.generation_config ?? null,
+    total_posts: raw.total_posts ?? plan.total_posts ?? null,
+    distribution_json: raw.distribution_json ?? plan.distribution_json ?? null,
     posts: (plan.posts || []).map((p: any) => ({
       ...p,
       week: (p.week_number ?? p.week ?? 1) as 1 | 2 | 3 | 4,
@@ -393,12 +411,22 @@ export type UpdatePostPayload = {
 function normalizePost(raw: Record<string, unknown>): Post {
   const week = (raw.week_number ?? raw.week ?? 1) as 1 | 2 | 3 | 4;
   const scheduledAt = raw.scheduled_at ?? raw.scheduledDate;
+  const scheduledAtStr =
+    scheduledAt != null
+      ? typeof scheduledAt === 'string'
+        ? scheduledAt
+        : (scheduledAt as Date)?.toISOString?.() ?? ''
+      : '';
   return {
     id: String(raw.id),
     title: raw.title != null ? String(raw.title) : '',
     content: raw.content != null ? String(raw.content) : '',
     platform: (raw.platform as Post['platform']) ?? 'linkedin',
-    scheduledDate: scheduledAt != null ? (typeof scheduledAt === 'string' ? scheduledAt : (scheduledAt as Date).toISOString?.() ?? '') : '',
+    scheduledDate: scheduledAtStr,
+    scheduled_date: raw.scheduled_date != null ? String(raw.scheduled_date) : undefined,
+    scheduled_time: raw.scheduled_time != null ? String(raw.scheduled_time) : undefined,
+    scheduled_at: raw.scheduled_at != null ? String(raw.scheduled_at) : undefined,
+    scheduling_window_id: raw.scheduling_window_id != null ? String(raw.scheduling_window_id) : undefined,
     week,
     status: (raw.status as Post['status']) ?? 'edited',
     hashtags: raw.hashtags != null ? String(raw.hashtags) : undefined,
@@ -426,4 +454,172 @@ export const resetPlan = async (campaignId: string): Promise<Campaign> => {
   return apiFetch<Campaign>(`/campaigns/${encodeURIComponent(campaignId)}/reset-plan`, {
     method: 'POST',
   });
+};
+
+// --- Schedule-auto & calendar (Milestone 3) ---
+export type ScheduleItem = {
+  post_id: string;
+  platform?: string | null;
+  title?: string | null;
+  status: string;
+  scheduled_at: string;
+  scheduled_date?: string | null;
+  day_of_week?: string | null;
+};
+
+export type ScheduleByDate = {
+  date: string;
+  posts: ScheduleItem[];
+};
+
+export type ScheduleByWeek = {
+  week: number;
+  by_date: ScheduleByDate[];
+};
+
+export type ScheduleAutoResponse = {
+  campaign_id: string;
+  assigned_count: number;
+  plan_start_date?: string | null;
+  by_week: ScheduleByWeek[];
+  by_date: ScheduleByDate[];
+};
+
+export const scheduleAuto = async (
+  campaignId: string,
+  planStartDate?: string | null
+): Promise<ScheduleAutoResponse> => {
+  return apiFetch<ScheduleAutoResponse>(
+    `/campaigns/${encodeURIComponent(campaignId)}/schedule-auto`,
+    {
+      method: 'POST',
+      body: JSON.stringify(planStartDate ? { plan_start_date: planStartDate } : {}),
+    }
+  );
+};
+
+export type PublicationWindow = {
+  id: string;
+  campaign_id: string;
+  platform: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  priority: number;
+  is_active: boolean;
+  created_at?: string | null;
+};
+
+export type PublicationWindowCreate = {
+  platform: 'linkedin' | 'instagram';
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  priority?: number;
+  is_active?: boolean;
+};
+
+export const fetchPublicationWindows = async (
+  campaignId: string
+): Promise<PublicationWindow[]> => {
+  const raw = await apiFetch<unknown[]>(
+    `/campaigns/${encodeURIComponent(campaignId)}/publication-windows`
+  );
+  return (raw || []).map((w: any) => ({
+    id: w.id,
+    campaign_id: w.campaign_id,
+    platform: w.platform ?? 'linkedin',
+    day_of_week: w.day_of_week ?? 'monday',
+    start_time: typeof w.start_time === 'string' ? w.start_time : '09:00:00',
+    end_time: typeof w.end_time === 'string' ? w.end_time : '17:00:00',
+    priority: w.priority ?? 1,
+    is_active: w.is_active !== false,
+    created_at: w.created_at,
+  }));
+};
+
+export const savePublicationWindows = async (
+  campaignId: string,
+  windows: PublicationWindowCreate[]
+): Promise<PublicationWindow[]> => {
+  const raw = await apiFetch<unknown[]>(
+    `/campaigns/${encodeURIComponent(campaignId)}/publication-windows`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ windows }),
+    }
+  );
+  return (raw || []).map((w: any) => ({
+    id: w.id,
+    campaign_id: w.campaign_id,
+    platform: w.platform ?? 'linkedin',
+    day_of_week: w.day_of_week ?? 'monday',
+    start_time: typeof w.start_time === 'string' ? w.start_time : '09:00:00',
+    end_time: typeof w.end_time === 'string' ? w.end_time : '17:00:00',
+    priority: w.priority ?? 1,
+    is_active: w.is_active !== false,
+    created_at: w.created_at,
+  }));
+};
+
+export type CalendarPostItem = {
+  post_id: string;
+  platform?: string | null;
+  title?: string | null;
+  status: string;
+  week_number: number;
+  scheduled_at?: string | null;
+  scheduled_date?: string | null;
+  client_name?: string | null;
+  campaign_name?: string | null;
+};
+
+export type CalendarByDate = {
+  date: string;
+  posts: CalendarPostItem[];
+};
+
+export type CalendarByWeek = {
+  week: number;
+  by_date: CalendarByDate[];
+};
+
+export type CampaignCalendarResponse = {
+  campaign_id: string;
+  campaign_name?: string | null;
+  client_name?: string | null;
+  by_week: CalendarByWeek[];
+  by_date: CalendarByDate[];
+};
+
+export const fetchCampaignCalendar = async (
+  campaignId: string
+): Promise<CampaignCalendarResponse> => {
+  return apiFetch<CampaignCalendarResponse>(
+    `/campaigns/${encodeURIComponent(campaignId)}/calendar`
+  );
+};
+
+export type PostSchedulePayload = {
+  scheduled_date: string; // YYYY-MM-DD
+  scheduled_time: string; // HH:mm or HH:mm:ss
+  scheduling_note?: string | null;
+};
+
+export const schedulePost = async (
+  postId: string,
+  payload: PostSchedulePayload
+): Promise<Post> => {
+  const raw = await apiFetch<Record<string, unknown>>(
+    `/posts/${encodeURIComponent(postId)}/schedule`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        scheduled_date: payload.scheduled_date,
+        scheduled_time: payload.scheduled_time,
+        scheduling_note: payload.scheduling_note ?? null,
+      }),
+    }
+  );
+  return normalizePost(raw);
 };
