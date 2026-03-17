@@ -41,6 +41,40 @@ function formatScheduled(at?: string | null, date?: string | null, time?: string
   return '—';
 }
 
+/** Normalize to YYYY-MM-DD for <input type="date">. Returns today if invalid/empty. */
+function toDateInputValue(value?: string | null): string {
+  if (!value || !value.trim()) {
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  }
+  try {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  } catch {
+    // fallback: if already YYYY-MM-DD-like, use it
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Normalize to HH:MM (24h) for <input type="time">. */
+function toTimeInputValue(value?: string | null): string {
+  if (!value || !value.trim()) return '09:00';
+  const trimmed = value.trim();
+  if (/^\d{1,2}:\d{2}(:\d{2})?(\s*[AaPp][Mm])?$/.test(trimmed)) {
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = match[2];
+      if (/[Pp][Mm]/.test(trimmed) && h < 12) h += 12;
+      if (/[Aa][Mm]/.test(trimmed) && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${m}`;
+    }
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) return trimmed.slice(0, 5);
+  return '09:00';
+}
+
 const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleSuccess }: PostEditModalProps) => {
   const { language } = useApp();
   const t = useTranslation(language);
@@ -62,9 +96,15 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
       setContent(post.content);
       setHashtags(post.hashtags || '');
       setLink(post.link || '');
-      setRescheduleDate(post.scheduled_date ?? post.scheduled_at?.slice(0, 10) ?? '');
+      setRescheduleDate(
+        toDateInputValue(
+          post.scheduled_date ?? post.scheduled_at ?? null
+        )
+      );
       setRescheduleTime(
-        post.scheduled_time ?? post.scheduled_at?.slice(11, 16) ?? '09:00'
+        toTimeInputValue(
+          post.scheduled_time ?? post.scheduled_at ?? null
+        )
       );
       setRescheduleNote('');
     }
@@ -89,6 +129,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
       onSave(updatedPost);
       onScheduleSuccess?.();
       toast.success(t('rescheduleSuccess'));
+      onClose();
     },
     onError: (err: Error) => {
       toast.error(err.message || t('errorGeneric'));
@@ -204,11 +245,13 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
 
           {canReschedule && (
             <div className="rounded-lg border p-4 space-y-3">
-              <h4 className="text-sm font-medium">{t('reschedulePost')} / {t('manualOverride')}</h4>
+              <h4 className="text-sm font-medium">{t('scheduleSectionTitle')}</h4>
+              <p className="text-xs text-muted-foreground">{t('scheduleSectionDesc')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>{t('scheduledDate')}</Label>
+                  <Label htmlFor="post-scheduled-date">{t('scheduledDate')}</Label>
                   <Input
+                    id="post-scheduled-date"
                     type="date"
                     value={rescheduleDate}
                     onChange={(e) => setRescheduleDate(e.target.value)}
@@ -216,8 +259,9 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
                   />
                 </div>
                 <div>
-                  <Label>{t('startTime')}</Label>
+                  <Label htmlFor="post-scheduled-time">{t('startTime')}</Label>
                   <Input
+                    id="post-scheduled-time"
                     type="time"
                     value={rescheduleTime}
                     onChange={(e) => setRescheduleTime(e.target.value)}
@@ -226,8 +270,9 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
                 </div>
               </div>
               <div>
-                <Label>{t('rescheduleNote')}</Label>
+                <Label htmlFor="post-schedule-note">{t('rescheduleNote')}</Label>
                 <Input
+                  id="post-schedule-note"
                   value={rescheduleNote}
                   onChange={(e) => setRescheduleNote(e.target.value)}
                   placeholder={t('rescheduleNote')}
@@ -241,7 +286,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
                 disabled={scheduleMutation.isPending || !rescheduleDate || !rescheduleTime}
               >
                 {scheduleMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />}
-                {t('reschedule')}
+                {t('updateScheduleButton')}
               </Button>
             </div>
           )}

@@ -436,7 +436,7 @@ const CampaignDetail = () => {
                   <Button
                     className="gap-2"
                     variant="default"
-                    onClick={() => scheduleAutoMutation.mutate()}
+                    onClick={() => scheduleAutoMutation.mutate(undefined)}
                     disabled={scheduleAutoMutation.isPending}
                   >
                     {scheduleAutoMutation.isPending ? (
@@ -491,14 +491,19 @@ const CampaignDetail = () => {
               <CampaignCalendarSection
                 campaignId={id}
                 language={language}
-                onOpenPost={(postId) => {
+                onReschedule={(postId, item) => {
                   const post = posts.find((p) => p.id === postId);
-                  if (post) setEditingPost(post);
-                }}
-                onReschedule={(postId) => {
-                  setReschedulePostId(postId);
-                  const post = posts.find((p) => p.id === postId);
-                  if (post) setEditingPost(post);
+                  if (post) {
+                    // Merge calendar item schedule so modal shows correct date/time
+                    setEditingPost({
+                      ...post,
+                      scheduled_at: item.scheduled_at ?? post.scheduled_at,
+                      scheduled_date: item.scheduled_date ?? post.scheduled_date,
+                      scheduled_time: item.scheduled_at
+                        ? item.scheduled_at.slice(11, 16)
+                        : post.scheduled_time,
+                    });
+                  }
                 }}
               />
             </div>

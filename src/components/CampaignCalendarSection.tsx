@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslation } from '@/lib/i18n';
 import type { Language } from '@/lib/i18n';
 import { fetchCampaignCalendar, type CampaignCalendarResponse, type CalendarPostItem } from '@/services/api';
-import { CalendarDays, Instagram, Linkedin, Loader2, ExternalLink } from 'lucide-react';
+import { CalendarDays, Instagram, Linkedin, Loader2 } from 'lucide-react';
 
 const weekKeys = ['week1', 'week2', 'week3', 'week4'] as const;
 const DAY_NAMES: Record<string, string> = {
@@ -17,7 +17,6 @@ const DAY_NAMES: Record<string, string> = {
 type CampaignCalendarSectionProps = {
   campaignId: string;
   language: Language;
-  onOpenPost?: (postId: string) => void;
   onReschedule?: (postId: string, item: CalendarPostItem) => void;
   onCancel?: (postId: string) => void;
 };
@@ -48,7 +47,6 @@ function formatTime(isoOrNull?: string | null): string {
 export default function CampaignCalendarSection({
   campaignId,
   language,
-  onOpenPost,
   onReschedule,
   onCancel,
 }: CampaignCalendarSectionProps) {
@@ -125,15 +123,6 @@ export default function CampaignCalendarSection({
                                 {item.status === 'scheduled' ? t('postScheduled') : item.status}
                               </Badge>
                               <div className="flex items-center gap-1">
-                                {onOpenPost && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => onOpenPost(item.post_id)}
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </Button>
-                                )}
                                 {onReschedule && (item.status === 'scheduled' || item.status === 'approved_final') && (
                                   <Button
                                     size="sm"
