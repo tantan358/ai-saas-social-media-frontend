@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderKanban, Building2, Loader2, MoreVertical, Pencil, Archive, ExternalLink, AlertTriangle } from 'lucide-react';
 
 const Clients = () => {
+  const navigate = useNavigate();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [archiveConfirmClient, setArchiveConfirmClient] = useState<Client | null>(null);
@@ -70,6 +72,11 @@ const Clients = () => {
 
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
+  };
+
+  const handleOpenClient = (clientId: string) => {
+    setSelectedClientId(clientId);
+    navigate('/campaigns');
   };
 
   const handleEditSuccess = () => {
@@ -367,7 +374,7 @@ const Clients = () => {
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSelectClient(client.id);
+                              handleOpenClient(client.id);
                             }}
                           >
                             <ExternalLink className="h-4 w-4 mr-2" />

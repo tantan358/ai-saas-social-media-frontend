@@ -86,6 +86,22 @@ const weekKeys: TranslationKey[] = ['week1', 'week2', 'week3', 'week4'];
 /** Campaign statuses that block Reset Planning (scheduled/published or later). */
 const RESET_PLAN_BLOCKED_STATUSES = ['scheduled', 'publishing', 'completed', 'cancelled'];
 
+function formatCreatedAt(value?: string | null, locale: string = 'en') {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    return d.toLocaleString(locale === 'es' ? 'es-ES' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return value;
+  }
+}
+
 const CampaignDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -355,8 +371,12 @@ const CampaignDetail = () => {
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <CalendarRange className="w-4 h-4 shrink-0" />
                     <div>
-                      <span className="block text-xs text-muted-foreground/70">{t('created')}</span>
-                      <span className="text-foreground font-medium">{campaign.createdAt}</span>
+                      <span className="block text-xs text-muted-foreground/70">
+                        {t('created')}
+                      </span>
+                      <span className="text-foreground font-medium">
+                        {formatCreatedAt(campaign.createdAt, language)}
+                      </span>
                     </div>
                   </div>
                 </div>
