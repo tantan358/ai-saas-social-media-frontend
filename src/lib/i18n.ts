@@ -201,10 +201,14 @@ export const translations = {
     // Milestone 3 – Scheduling
     distributionSummary: 'Monthly distribution',
     weekPosts: 'Week {n}: {count} posts',
-    scheduleAuto: 'Programar automáticamente',
+    scheduleAuto: 'Schedule Automatically',
     scheduleAutoDesc: 'Assign dates and times from publication windows. Distributed across all 4 weeks.',
+    scheduleAutoConfirmTitle: 'Apply automatic schedule?',
+    scheduleAutoConfirmDesc:
+      'This will assign dates and times to posts based on your publication windows. You can still reschedule manually afterwards.',
+    scheduleAutoConfirm: 'Apply schedule',
     scheduleAutoSuccess: 'Schedule applied. Posts are distributed across weeks and valid time windows.',
-    publicationWindows: 'Ventanas de publicación',
+    publicationWindows: 'Publication windows',
     publicationWindowsDesc: 'Define when posts can be scheduled per platform. The system picks a time within each window.',
     addWindow: 'Add window',
     editWindow: 'Edit window',
@@ -438,6 +442,10 @@ export const translations = {
     weekPosts: 'Semana {n}: {count} posts',
     scheduleAuto: 'Programar automáticamente',
     scheduleAutoDesc: 'Asigna fechas y horas según las ventanas de publicación. Distribuido en las 4 semanas.',
+    scheduleAutoConfirmTitle: '¿Aplicar programación automática?',
+    scheduleAutoConfirmDesc:
+      'Esta acción asignará fechas y horas a los posts según tus ventanas de publicación. Podrás reprogramar manualmente después.',
+    scheduleAutoConfirm: 'Aplicar programación',
     scheduleAutoSuccess: 'Programación aplicada. Los posts se distribuyen en las semanas y ventanas válidas.',
     publicationWindows: 'Ventanas de publicación',
     publicationWindowsDesc: 'Define cuándo se pueden programar posts por plataforma. El sistema elige una hora dentro de cada ventana.',

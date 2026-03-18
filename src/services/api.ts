@@ -580,8 +580,6 @@ export type CalendarPostItem = {
   scheduled_date?: string | null;
   /** Optional internal note stored with this scheduled post. */
   scheduling_note?: string | null;
-  /** Window used for scheduling; null/undefined often means manual override. */
-  scheduling_window_id?: string | null;
   client_name?: string | null;
   campaign_name?: string | null;
 };

@@ -114,6 +114,7 @@ const CampaignDetail = () => {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showScheduleAutoDialog, setShowScheduleAutoDialog] = useState(false);
   const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
   const [scheduleResult, setScheduleResult] = useState<ScheduleAutoResponse | null>(null);
 
@@ -302,10 +303,7 @@ const CampaignDetail = () => {
   const totalPosts = plan?.total_posts ?? (distribution ? distribution.reduce((a, b) => a + b, 0) : null);
 
   const calendarWeeks = campaignCalendar?.by_week ?? [];
-  const calendarAssignedCount = calendarWeeks.reduce(
-    (acc, w) => acc + (w.by_date?.reduce((a, bd) => a + (bd.posts?.length ?? 0), 0) ?? 0),
-    0
-  );
+  const showFinalScheduleFromServer = !!campaign && ['scheduled', 'publishing', 'completed'].includes(campaign.status);
 
   return (
     <MainLayout>
@@ -451,7 +449,7 @@ const CampaignDetail = () => {
                   <Button
                     className="gap-2"
                     variant="default"
-                    onClick={() => scheduleAutoMutation.mutate(undefined)}
+                    onClick={() => setShowScheduleAutoDialog(true)}
                     disabled={scheduleAutoMutation.isPending}
                   >
                     {scheduleAutoMutation.isPending ? (
@@ -467,7 +465,7 @@ const CampaignDetail = () => {
           </CardContent>
         </Card>
 
-        {(scheduleResult?.assigned_count ?? 0) > 0 || calendarAssignedCount > 0 ? (
+        {(scheduleResult?.assigned_count ?? 0) > 0 || showFinalScheduleFromServer ? (
           <Card className="mb-6">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold mb-2">{t('scheduleAutoSuccess')}</h3>
@@ -483,14 +481,17 @@ const CampaignDetail = () => {
                           <ul className="mt-1 space-y-1">
                             {bd.posts.map((p) => (
                               <li key={p.post_id} className="text-sm">
-                                {p.scheduled_at ? p.scheduled_at.slice(11, 16) : '—'} {p.platform} |{' '}
-                                {p.title || p.post_id}{' '}
-                                {p.status === 'approved_final' ? `(${t('postScheduledFinal')})` : ''}
-                                {p.status !== 'approved_final' &&
-                                // when backend returns this, null/undefined usually means manual reschedule
-                                ('scheduling_window_id' in p ? !(p as any).scheduling_window_id : false)
-                                  ? `(${t('manualOverride')})`
-                                  : ''}
+                                <span className="inline-flex items-center gap-2">
+                                  <span>
+                                    {p.scheduled_at ? p.scheduled_at.slice(11, 16) : '—'} {p.platform} |{' '}
+                                    {p.title || p.post_id}
+                                  </span>
+                                  {p.status === 'approved_final' && (
+                                    <Badge className="border text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                      {t('postScheduledFinal')}
+                                    </Badge>
+                                  )}
+                                </span>
                               </li>
                             ))}
                           </ul>
@@ -696,6 +697,25 @@ const CampaignDetail = () => {
             >
               {resetMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               {t('resetPlanningConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showScheduleAutoDialog} onOpenChange={setShowScheduleAutoDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('scheduleAutoConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('scheduleAutoConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={scheduleAutoMutation.isPending}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => scheduleAutoMutation.mutate(undefined)}
+              disabled={scheduleAutoMutation.isPending}
+            >
+              {scheduleAutoMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              {t('scheduleAutoConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
