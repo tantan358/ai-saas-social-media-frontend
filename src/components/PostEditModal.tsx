@@ -125,7 +125,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
 
   const scheduleMutation = useMutation({
     mutationFn: (payload: { scheduled_date: string; scheduled_time: string }) =>
-      schedulePost(post!.id, payload),
+      schedulePost(post!.id, { ...payload, scheduling_note: 'rescheduled' }),
     onSuccess: (updatedPost) => {
       onSave(updatedPost);
       onScheduleSuccess?.();

@@ -229,6 +229,12 @@ const CampaignDetail = () => {
   const hasPlan = !!plan && !planError;
   // Approved: from server status or local state after approving
   const isPlanApproved = campaign?.status === 'planning_approved' || isApproved;
+  // Plan editing is only allowed before we reach scheduling-related states
+  const canEditPlanningContent =
+    !!campaign && !['planning_approved', 'scheduled', 'publishing', 'completed'].includes(campaign.status);
+  // Show scheduling UI (windows + calendar) for approved and later lifecycle states
+  const showSchedulingSections =
+    !!campaign && ['planning_approved', 'scheduled', 'publishing', 'completed'].includes(campaign.status);
   // Reset Planning: allowed when there is a plan and campaign is not scheduled/published
   const canResetPlan =
     hasPlan &&
@@ -292,7 +298,7 @@ const CampaignDetail = () => {
   };
 
   const handlePostClick = (post: Post) => {
-    if (!isApproved) {
+    if (canEditPlanningContent) {
       setEditingPost(post);
     }
   };
@@ -465,50 +471,19 @@ const CampaignDetail = () => {
           </CardContent>
         </Card>
 
-        {(scheduleResult?.assigned_count ?? 0) > 0 || showFinalScheduleFromServer ? (
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-2">{t('scheduleAutoSuccess')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{t('timeFromWindows')}</p>
-              <div className="space-y-4">
-                {(scheduleResult?.by_week ?? calendarWeeks).map((w) => (
-                  <div key={w.week} className="rounded-lg border p-4">
-                    <h4 className="text-sm font-medium mb-2">{t(weekKeys[w.week - 1])}</h4>
-                    <div className="space-y-2">
-                      {w.by_date.map((bd) => (
-                        <div key={bd.date}>
-                          <span className="text-xs text-muted-foreground">{bd.date}</span>
-                          <ul className="mt-1 space-y-1">
-                            {bd.posts.map((p) => (
-                              <li key={p.post_id} className="text-sm">
-                                <span className="inline-flex items-center gap-2">
-                                  <span>
-                                    {p.scheduled_at ? p.scheduled_at.slice(11, 16) : '—'} {p.platform} |{' '}
-                                    {p.title || p.post_id}
-                                  </span>
-                                  {p.status === 'approved_final' && (
-                                    <Badge className="border text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                                      {t('postScheduledFinal')}
-                                    </Badge>
-                                  )}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+        {/* Removed schedule summary card per request */}
 
-        {isPlanApproved && id && (
+        {showSchedulingSections && id && (
           <>
             <div className="mb-6">
-              <PublicationWindowsSection campaignId={id} language={language} />
+              <PublicationWindowsSection
+                campaignId={id}
+                language={language}
+                locked={
+                  !!scheduleResult ||
+                  (campaign && ['scheduled', 'publishing', 'completed'].includes(campaign.status))
+                }
+              />
             </div>
             <div className="mb-6">
               <CampaignCalendarSection
@@ -550,11 +525,7 @@ const CampaignDetail = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">{t('monthlyPlanning')}</h2>
-            {hasPlan &&
-              posts.length > 0 &&
-              !isPlanApproved &&
-              campaign &&
-              !RESET_PLAN_BLOCKED_STATUSES.includes(campaign.status) && (
+            {hasPlan && posts.length > 0 && canEditPlanningContent && campaign && (
                 <Button className="gap-2" variant="default" onClick={() => setShowApproveDialog(true)}>
                   <CheckCircle2 className="w-4 h-4" />
                   {t('approveMonthlyPlanning')}
@@ -615,7 +586,7 @@ const CampaignDetail = () => {
 
           {/* Plan content: grid adapts for 3–7 posts per week, platform badge on every card */}
           {!isPlanLoading && !generateMutation.isPending && hasPlan && posts.length > 0 && (
-            <div className={`space-y-8 ${isPlanApproved ? 'opacity-80 pointer-events-none select-none' : ''}`}>
+            <div className={`space-y-8 ${!canEditPlanningContent ? 'opacity-70 pointer-events-none select-none' : ''}`}>
               {([1, 2, 3, 4] as const).map((week, idx) => {
                 const weekPosts = getPostsByWeek(week);
                 return (

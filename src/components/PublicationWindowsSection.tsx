@@ -38,11 +38,14 @@ type WindowForm = PublicationWindowCreate & { id?: string };
 type PublicationWindowsSectionProps = {
   campaignId: string;
   language: Language;
+  /** When true, windows are locked after automatic scheduling. */
+  locked?: boolean;
 };
 
 export default function PublicationWindowsSection({
   campaignId,
   language,
+  locked = false,
 }: PublicationWindowsSectionProps) {
   const t = useTranslation(language);
   const queryClient = useQueryClient();
@@ -103,20 +106,26 @@ export default function PublicationWindowsSection({
   return (
     <Card>
       <CardContent className="p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
               <CalendarClock className="w-5 h-5" />
               {t('publicationWindows')}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">{t('publicationWindowsDesc')}</p>
+            {locked && (
+              <p className="text-xs font-medium text-amber-600 flex items-center gap-1">
+                {/* Reuse manual override copy to avoid new keys */}
+                {t('manualOverride')}
+              </p>
+            )}
           </div>
           <Button
             size="sm"
             variant="outline"
             className="gap-2"
             onClick={() => setIsAddOpen(true)}
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || locked}
           >
             <Plus className="w-4 h-4" />
             {t('addWindow')}
@@ -137,7 +146,9 @@ export default function PublicationWindowsSection({
             {windows.map((w) => (
               <div
                 key={w.id}
-                className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border text-sm ${!w.is_active ? 'opacity-60 bg-muted/30' : ''}`}
+                className={`flex flex-wrap items-center gap-3 p-3 rounded-lg border text-sm transition-colors ${
+                  !w.is_active ? 'opacity-60 bg-muted/30' : 'bg-card hover:bg-muted/40'
+                }`}
               >
                 <span className="font-medium capitalize">{w.platform}</span>
                 <span className="text-muted-foreground">{formatDay(w.day_of_week)}</span>
@@ -151,7 +162,7 @@ export default function PublicationWindowsSection({
                     size="sm"
                     variant="ghost"
                     onClick={() => setEditingWindow({ ...w })}
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || locked}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
@@ -160,7 +171,7 @@ export default function PublicationWindowsSection({
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDeactivate(w.id)}
-                      disabled={saveMutation.isPending}
+                      disabled={saveMutation.isPending || locked}
                     >
                       {t('deactivateWindow')}
                     </Button>
@@ -169,7 +180,7 @@ export default function PublicationWindowsSection({
                       size="sm"
                       variant="ghost"
                       onClick={() => handleActivate(w.id)}
-                      disabled={saveMutation.isPending}
+                      disabled={saveMutation.isPending || locked}
                     >
                       {t('activateWindow')}
                     </Button>
@@ -193,7 +204,7 @@ export default function PublicationWindowsSection({
           else handleAdd(form);
         }}
         t={t}
-        isSubmitting={saveMutation.isPending}
+        isSubmitting={saveMutation.isPending || locked}
       />
     </Card>
   );
