@@ -277,6 +277,8 @@ export type Post = {
   scheduled_time?: string;
   scheduled_at?: string;
   scheduling_window_id?: string | null;
+  /** Optional internal note attached to this post's schedule. */
+  scheduling_note?: string | null;
   week: 1 | 2 | 3 | 4;
   status: PostStatus;
   hashtags?: string;
@@ -427,6 +429,12 @@ function normalizePost(raw: Record<string, unknown>): Post {
     scheduled_time: raw.scheduled_time != null ? String(raw.scheduled_time) : undefined,
     scheduled_at: raw.scheduled_at != null ? String(raw.scheduled_at) : undefined,
     scheduling_window_id: raw.scheduling_window_id != null ? String(raw.scheduling_window_id) : undefined,
+    scheduling_note:
+      raw.scheduling_note != null
+        ? typeof raw.scheduling_note === 'string'
+          ? raw.scheduling_note
+          : String(raw.scheduling_note)
+        : undefined,
     week,
     status: (raw.status as Post['status']) ?? 'edited',
     hashtags: raw.hashtags != null ? String(raw.hashtags) : undefined,
@@ -570,6 +578,10 @@ export type CalendarPostItem = {
   week_number: number;
   scheduled_at?: string | null;
   scheduled_date?: string | null;
+  /** Optional internal note stored with this scheduled post. */
+  scheduling_note?: string | null;
+  /** Window used for scheduling; null/undefined often means manual override. */
+  scheduling_window_id?: string | null;
   client_name?: string | null;
   campaign_name?: string | null;
 };
@@ -610,15 +622,20 @@ export const schedulePost = async (
   postId: string,
   payload: PostSchedulePayload
 ): Promise<Post> => {
+  const body: Record<string, unknown> = {
+    scheduled_date: payload.scheduled_date,
+    scheduled_time: payload.scheduled_time,
+  };
+  // Only send scheduling_note when explicitly provided so we don't erase existing notes unintentionally
+  if (Object.prototype.hasOwnProperty.call(payload, 'scheduling_note')) {
+    body.scheduling_note = payload.scheduling_note ?? null;
+  }
+
   const raw = await apiFetch<Record<string, unknown>>(
     `/posts/${encodeURIComponent(postId)}/schedule`,
     {
       method: 'PUT',
-      body: JSON.stringify({
-        scheduled_date: payload.scheduled_date,
-        scheduled_time: payload.scheduled_time,
-        scheduling_note: payload.scheduling_note ?? null,
-      }),
+      body: JSON.stringify(body),
     }
   );
   return normalizePost(raw);

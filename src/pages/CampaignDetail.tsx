@@ -117,6 +117,13 @@ const CampaignDetail = () => {
   const [localPosts, setLocalPosts] = useState<Post[] | null>(null);
   const [scheduleResult, setScheduleResult] = useState<ScheduleAutoResponse | null>(null);
 
+  // Fetch calendar (used to render final schedule summary even after refresh)
+  const { data: campaignCalendar } = useQuery({
+    queryKey: ['campaign-calendar', id],
+    queryFn: () => fetchCampaignCalendar(id!),
+    enabled: !!id,
+  });
+
   // Fetch campaigns to find the current one
   const { data: campaigns = [], isLoading: isCampaignLoading } = useQuery({
     queryKey: ['campaigns', selectedClientId],
@@ -226,6 +233,8 @@ const CampaignDetail = () => {
     hasPlan &&
     campaign &&
     !RESET_PLAN_BLOCKED_STATUSES.includes(campaign.status);
+  // Schedule Automatically: only when campaign is in planning_approved status
+  const canScheduleAuto = campaign?.status === 'planning_approved';
 
   if (isCampaignLoading) {
     return (
@@ -291,6 +300,12 @@ const CampaignDetail = () => {
 
   const distribution = plan?.distribution_json ?? (plan?.total_posts != null ? undefined : null);
   const totalPosts = plan?.total_posts ?? (distribution ? distribution.reduce((a, b) => a + b, 0) : null);
+
+  const calendarWeeks = campaignCalendar?.by_week ?? [];
+  const calendarAssignedCount = calendarWeeks.reduce(
+    (acc, w) => acc + (w.by_date?.reduce((a, bd) => a + (bd.posts?.length ?? 0), 0) ?? 0),
+    0
+  );
 
   return (
     <MainLayout>
@@ -432,7 +447,7 @@ const CampaignDetail = () => {
                     {t('resetPlanning')}
                   </Button>
                 )}
-                {isPlanApproved && (
+                {canScheduleAuto && (
                   <Button
                     className="gap-2"
                     variant="default"
@@ -452,13 +467,13 @@ const CampaignDetail = () => {
           </CardContent>
         </Card>
 
-        {scheduleResult && scheduleResult.assigned_count > 0 && (
+        {(scheduleResult?.assigned_count ?? 0) > 0 || calendarAssignedCount > 0 ? (
           <Card className="mb-6">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold mb-2">{t('scheduleAutoSuccess')}</h3>
               <p className="text-sm text-muted-foreground mb-4">{t('timeFromWindows')}</p>
               <div className="space-y-4">
-                {scheduleResult.by_week.map((w) => (
+                {(scheduleResult?.by_week ?? calendarWeeks).map((w) => (
                   <div key={w.week} className="rounded-lg border p-4">
                     <h4 className="text-sm font-medium mb-2">{t(weekKeys[w.week - 1])}</h4>
                     <div className="space-y-2">
@@ -468,7 +483,14 @@ const CampaignDetail = () => {
                           <ul className="mt-1 space-y-1">
                             {bd.posts.map((p) => (
                               <li key={p.post_id} className="text-sm">
-                                {p.scheduled_at?.slice(11, 16)} {p.platform} | {p.title || p.post_id}
+                                {p.scheduled_at ? p.scheduled_at.slice(11, 16) : '—'} {p.platform} |{' '}
+                                {p.title || p.post_id}{' '}
+                                {p.status === 'approved_final' ? `(${t('postScheduledFinal')})` : ''}
+                                {p.status !== 'approved_final' &&
+                                // when backend returns this, null/undefined usually means manual reschedule
+                                ('scheduling_window_id' in p ? !(p as any).scheduling_window_id : false)
+                                  ? `(${t('manualOverride')})`
+                                  : ''}
                               </li>
                             ))}
                           </ul>
@@ -480,7 +502,7 @@ const CampaignDetail = () => {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {isPlanApproved && id && (
           <>
@@ -502,6 +524,7 @@ const CampaignDetail = () => {
                       scheduled_time: item.scheduled_at
                         ? item.scheduled_at.slice(11, 16)
                         : post.scheduled_time,
+                      scheduling_note: item.scheduling_note ?? post.scheduling_note,
                     });
                   }
                 }}
@@ -526,12 +549,16 @@ const CampaignDetail = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">{t('monthlyPlanning')}</h2>
-            {hasPlan && posts.length > 0 && !isPlanApproved && (
-              <Button className="gap-2" variant="default" onClick={() => setShowApproveDialog(true)}>
-                <CheckCircle2 className="w-4 h-4" />
-                {t('approveMonthlyPlanning')}
-              </Button>
-            )}
+            {hasPlan &&
+              posts.length > 0 &&
+              !isPlanApproved &&
+              campaign &&
+              !RESET_PLAN_BLOCKED_STATUSES.includes(campaign.status) && (
+                <Button className="gap-2" variant="default" onClick={() => setShowApproveDialog(true)}>
+                  <CheckCircle2 className="w-4 h-4" />
+                  {t('approveMonthlyPlanning')}
+                </Button>
+              )}
           </div>
 
           {/* Loading state for plan */}

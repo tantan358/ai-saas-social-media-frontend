@@ -85,10 +85,12 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
   const [link, setLink] = useState('');
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
-  const [rescheduleNote, setRescheduleNote] = useState('');
 
   const canReschedule =
     post?.status === 'approved_final' || post?.status === 'scheduled';
+  // After approve: content locked, schedule editable. Before approve: content editable, schedule locked.
+  const contentLocked = post?.status === 'approved_final' || post?.status === 'scheduled';
+  const scheduleLocked = !canReschedule;
 
   useEffect(() => {
     if (post) {
@@ -106,7 +108,6 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
           post.scheduled_time ?? post.scheduled_at ?? null
         )
       );
-      setRescheduleNote('');
     }
   }, [post]);
 
@@ -123,7 +124,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: (payload: { scheduled_date: string; scheduled_time: string; scheduling_note?: string }) =>
+    mutationFn: (payload: { scheduled_date: string; scheduled_time: string }) =>
       schedulePost(post!.id, payload),
     onSuccess: (updatedPost) => {
       onSave(updatedPost);
@@ -152,7 +153,6 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
     scheduleMutation.mutate({
       scheduled_date: rescheduleDate,
       scheduled_time: timeStr,
-      scheduling_note: rescheduleNote.trim() || undefined,
     });
   };
 
@@ -197,7 +197,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('titlePlaceholder')}
               className="h-10"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || contentLocked}
             />
           </div>
 
@@ -210,7 +210,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
               rows={5}
               placeholder={t('contentPlaceholder')}
               className="resize-none"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || contentLocked}
             />
           </div>
 
@@ -224,7 +224,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
               onChange={(e) => setHashtags(e.target.value)}
               placeholder={t('hashtagsPlaceholder')}
               className="h-10"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || contentLocked}
             />
           </div>
 
@@ -239,11 +239,11 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
               onChange={(e) => setLink(e.target.value)}
               placeholder={t('linkPlaceholder')}
               className="h-10"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || contentLocked}
             />
           </div>
 
-          {canReschedule && (
+          {(canReschedule || scheduleLocked) && (
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="text-sm font-medium">{t('scheduleSectionTitle')}</h4>
               <p className="text-xs text-muted-foreground">{t('scheduleSectionDesc')}</p>
@@ -255,7 +255,7 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
                     type="date"
                     value={rescheduleDate}
                     onChange={(e) => setRescheduleDate(e.target.value)}
-                    disabled={scheduleMutation.isPending}
+                    disabled={scheduleMutation.isPending || scheduleLocked}
                   />
                 </div>
                 <div>
@@ -265,29 +265,10 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
                     type="time"
                     value={rescheduleTime}
                     onChange={(e) => setRescheduleTime(e.target.value)}
-                    disabled={scheduleMutation.isPending}
+                    disabled={scheduleMutation.isPending || scheduleLocked}
                   />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="post-schedule-note">{t('rescheduleNote')}</Label>
-                <Input
-                  id="post-schedule-note"
-                  value={rescheduleNote}
-                  onChange={(e) => setRescheduleNote(e.target.value)}
-                  placeholder={t('rescheduleNote')}
-                  disabled={scheduleMutation.isPending}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleReschedule}
-                disabled={scheduleMutation.isPending || !rescheduleDate || !rescheduleTime}
-              >
-                {scheduleMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />}
-                {t('updateScheduleButton')}
-              </Button>
             </div>
           )}
         </div>
@@ -296,10 +277,22 @@ const PostEditModal = ({ post, postIndex = 1, open, onClose, onSave, onScheduleS
           <Button variant="outline" onClick={onClose} disabled={mutation.isPending || scheduleMutation.isPending}>
             {t('cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={mutation.isPending}>
-            {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            {t('save')}
-          </Button>
+          {canReschedule && (
+            <Button
+              variant="default"
+              onClick={handleReschedule}
+              disabled={scheduleMutation.isPending || !rescheduleDate || !rescheduleTime}
+            >
+              {scheduleMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />}
+              {t('updateScheduleButton')}
+            </Button>
+          )}
+          {!contentLocked && (
+            <Button onClick={handleSave} disabled={mutation.isPending}>
+              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              {t('save')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

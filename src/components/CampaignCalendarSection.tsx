@@ -120,7 +120,13 @@ export default function CampaignCalendarSection({
                                 {item.title || 'Sin título'}
                               </span>
                               <Badge variant="secondary" className="text-xs">
-                                {item.status === 'scheduled' ? t('postScheduled') : item.status}
+                                {item.status === 'approved_final'
+                                  ? t('postScheduledFinal')
+                                  : item.status === 'scheduled'
+                                    ? t('postScheduled')
+                                    : item.status === 'canceled'
+                                      ? t('postCanceled')
+                                      : item.status}
                               </Badge>
                               <div className="flex items-center gap-1">
                                 {onReschedule && (item.status === 'scheduled' || item.status === 'approved_final') && (
