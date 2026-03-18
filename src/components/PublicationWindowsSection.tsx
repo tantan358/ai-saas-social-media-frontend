@@ -234,6 +234,16 @@ function WindowFormDialog({
   const [priority, setPriority] = useState(1);
   const [isActive, setIsActive] = useState(true);
 
+  const isInvalidRange = (() => {
+    if (!startTime || !endTime) return false;
+    const [sh, sm] = startTime.split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = endTime.split(':').map((v) => parseInt(v, 10));
+    if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) return false;
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    return startMinutes >= endMinutes;
+  })();
+
   useEffect(() => {
     if (initial && open) {
       setPlatform((initial.platform as 'linkedin' | 'instagram') || 'linkedin');
@@ -253,6 +263,7 @@ function WindowFormDialog({
   }, [initial, open]);
 
   const handleSubmit = () => {
+    if (isInvalidRange) return;
     onSave({
       platform,
       day_of_week: dayOfWeek,
@@ -314,6 +325,11 @@ function WindowFormDialog({
               />
             </div>
           </div>
+          {isInvalidRange && (
+            <p className="text-xs text-destructive">
+              {t('startTime')} must be earlier than {t('endTime')}.
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <Label>{t('active')}</Label>
@@ -321,7 +337,7 @@ function WindowFormDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>{t('cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          <Button onClick={handleSubmit} disabled={isSubmitting || isInvalidRange}>
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             {t('save')}
           </Button>
